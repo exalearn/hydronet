@@ -1,0 +1,18 @@
+name: hydronet
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python==3.*
+  - tensorflow==2.2.*
+  - ase==3.19.*
+  - networkx==2.4.*
+  - pandas==0.25.*
+  - scikit-learn==0.22.*
+  - tqdm
+  - jupyterlab
+  - matplotlib
+  - pytest
+  - pip
+  - pip:
+      - -e .  # The graphsage libraries in development mode
