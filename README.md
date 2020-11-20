@@ -4,10 +4,11 @@ This directory holds notebooks that illustrate how to use the HydroNet Challenge
 
 ## Installation
 
-Install the environment needed for these notebooks with `conda env create --file environment.yml --force`.
+Install the environment needed for these notebooks with `conda env create --file environment.yml --force`
 
 ## Quickstart
 
-Follow the **TBD** instructions to download the data.
+Download the data from [our Globus endpoint](https://app.globus.org/file-manager?origin_id=e38ee745-6d04-11e5-ba46-22000b92c6ec&origin_path=%2Fexalearn-design%2Fneurips%2Fdata%2Foutput%2F) to the `./data/output` folder.
+The `./get-data.sh` script automates the download process if your computer has Globus Connect installed.
 
 Each of the subdirectories hold specific notebooks that give example solutions to some of the challenge problems.

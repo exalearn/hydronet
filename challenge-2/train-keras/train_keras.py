@@ -1,9 +1,9 @@
 """Trains the model using Keras without any kind of data-parallel training"""
 
-from graphsage.mpnn.callbacks import EpochTimeLogger, LRLogger
-from graphsage.mpnn.data import make_data_loader
-from graphsage.mpnn.layers import build_fn
-from graphsage.utils import get_platform_info
+from hydronet.mpnn.callbacks import EpochTimeLogger, LRLogger
+from hydronet.mpnn.data import make_data_loader
+from hydronet.mpnn.layers import build_fn
+from hydronet.utils import get_platform_info
 
 import tensorflow as tf
 from tensorflow.keras.models import load_model

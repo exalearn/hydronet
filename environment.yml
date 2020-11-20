@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   - python==3.*
-  - tensorflow==2.2.*
+  - tensorflow-gpu==2.2.*
   - ase==3.19.*
   - networkx==2.4.*
   - pandas==0.25.*
@@ -15,4 +15,5 @@ dependencies:
   - pytest
   - pip
   - pip:
+      - globus-cli
       - -e .  # The graphsage libraries in development mode
