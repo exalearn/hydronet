@@ -2,7 +2,13 @@
 
 The HydroNet benchmark defines a series of challenge problems around predicting stable clusters of water molecules.
 
-Water is fantastically complex for reasons that [science is yet to fully understand](http://www1.lsbu.ac.uk/water/water_anomalies.html). Many of these unique (and important!) properties are driven by the intricate structures formed by water molecules due to its atypical bonding structure. HydroNet challenges are designed to improve scientist's ability to predict such structures and, thereby, unravel more mysteries about why water is wierd.
+Water is fantastically complex for reasons that [science is yet to fully understand](http://www1.lsbu.ac.uk/water/water_anomalies.html). Many of these unique (and important!) properties are driven by the intricate structures formed by water molecules due to its atypical bonding structure. HydroNet challenges are designed to improve scientist"s ability to predict such structures and, thereby, unravel more mysteries about why water is weird.
+
+## Background
+
+Data for the HydroNet benchmark is based on [a study of low-lying energy geometries](https://aip.scitation.org/doi/10.1063/1.5128378)  from the Jawaharlal Nehru University, University of Washington, and Pacific Northwest National Laboratory.
+
+Each entry represents a different bonding network of water clusters that were generated using 
 
 ## Challenge Problems
 
@@ -20,11 +26,11 @@ All files have a prefix of `geom_` (e.g., `geom_train.json.gz`) and contain reco
 
 ```json
 {
-    'z': [8, 1, 1, 8, 1, 1, 8, 1, 1],
-    'n_water': 3,
-    'n_atom': 9,
-    'atom': [0, 1, 1, 0, 1, 1, 0, 1, 1],
-    'coords': [[25.3875809, 2.28446364, 8.01933861],
+    "z": [8, 1, 1, 8, 1, 1, 8, 1, 1],
+    "n_water": 3,
+    "n_atom": 9,
+    "atom": [0, 1, 1, 0, 1, 1, 0, 1, 1],
+    "coords": [[25.3875809, 2.28446364, 8.01933861],
                [24.686451, 2.11461496, 7.36908007],
                [26.1070786, 1.70453322, 7.77935553],
                [22.9643402, 1.68695939, 6.75715494],
@@ -33,7 +39,7 @@ All files have a prefix of `geom_` (e.g., `geom_train.json.gz`) and contain reco
                [23.0780773, 1.86950338, 9.5477314],
                [22.9238548, 2.4637537, 10.2781725],
                [23.9850082, 2.04813766, 9.2500248]],
-	'energy': -15.9416428
+    "energy": -15.9416428
 }
 ```
 
@@ -49,16 +55,16 @@ We present two versions:
 
 ```json
 {
-	'n_water': 3,
-    'n_atom': 9,
-    'n_bond': 18,
-    'atom': [0, 1, 1, 0, 1, 1, 0, 1, 1],
-    'bond': [0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1],
-    'connectivity': [[0, 1], [0, 2], [0, 8], [1, 0], [1, 3],
+    "n_water": 3,
+    "n_atom": 9,
+    "n_bond": 18,
+    "atom": [0, 1, 1, 0, 1, 1, 0, 1, 1],
+    "bond": [0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1],
+    "connectivity": [[0, 1], [0, 2], [0, 8], [1, 0], [1, 3],
                      [2, 0], [3, 1], [3, 4], [3, 5], [4, 3],
                      [4, 6], [5, 3], [6, 4], [6, 7], [6, 8],
                      [7, 6], [8, 0], [8, 6]],
-    'energy': -15.9416428
+    "energy": -15.9416428
 }
 ```
 
@@ -66,13 +72,13 @@ We present two versions:
 
 ```json
 {
-    'n_water': 3,
-    'n_atom': 3,
-    'n_bond': 6,
-    'atom': [0, 0, 0],
-    'bond': [0, 1, 1, 0, 1, 0],
-    'connectivity': [[0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1]],
-    'energy': -15.9416428
+    "n_water": 3,
+    "n_atom": 3,
+    "n_bond": 6,
+    "atom": [0, 0, 0],
+    "bond": [0, 1, 1, 0, 1, 0],
+    "connectivity": [[0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1]],
+    "energy": -15.9416428
 }
 ```
 
@@ -85,6 +91,16 @@ The number of possible water clusters explodes combinatorially with the number o
 
 
 ## Example Solutions
+
+We provide a few example solutions along with the data.
+
+## Challenge 1
+
+We’ve published in the [Journal of Chemical Physics](https://aip.scitation.org/doi/10.1063/5.0009933) and provide [an implementation](https://github.com/exalearn/molecular-graph-descriptors) of an example solution for Challenge 1. 
+
+The model is based on the Continuous-Filter Convolutional Neural Network (i.e., [SchNet](https://aip.scitation.org/doi/10.1063/1.5019779)), as implemented via [SchNetPack](https://schnetpack.readthedocs.io/), and was analyzed using graph-theoretical descriptors. Code for the computation of which is also provided [on GitHub](https://github.com/exalearn/molecular-graph-descriptors).
+
+## Challenge 2
 
 Our [GitHub repository](https://github.com/exalearn/hydronet) provides example solutions for Challenge 2.
 
