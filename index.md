@@ -6,13 +6,13 @@ Water is fantastically complex for reasons that [science is yet to fully underst
 
 ## Background
 
-Data for the HydroNet benchmark is based on [a study of low-lying energy geometries](https://aip.scitation.org/doi/10.1063/1.5128378)  from the Jawaharlal Nehru University, University of Washington, and Pacific Northwest National Laboratory.
+Data for the HydroNet benchmark is based on [a study of low-lying energy geometries](https://aip.scitation.org/doi/10.1063/1.5128378)  from the Jawaharlal Nehru University, University of Washington, and Pacific Northwest National Laboratory. The master dataset used to generate our benchmarks is available from [WDBase](https://sites.uw.edu/wdbase/).
 
-Each entry represents a different bonding network of water clusters that were generated using 
+Each entry represents a different bonding network of water clusters that were generated using a Monte Carlo basin paving algorithm to capture not just the most-stable networks but also a robust sampling of near-best networks. The energies for each structure here are computed with [TTM2.1.F](https://pubs.acs.org/doi/abs/10.1021/jp056477k) - a very fast method for computing the energy of geometries of water clusters.
 
 ## Challenge Problems
 
-<img width=50% src="img/benchmarks.png">
+![challenge-display](./img/benchmarks.png)
 
 Our challenge problem is broken into three sub challenges. 
 
@@ -86,9 +86,7 @@ We present two versions:
 
 The number of possible water clusters explodes combinatorially with the number of water molecules. Finding the lowest-energy structures in this space is a grand challenge in science. 
 
-<img width=75% src="./img/cluster-examples.png" alt="example-clusters"/>
-
-
+![example-clusters](./img/cluster-examples.png)
 
 ## Example Solutions
 
@@ -108,4 +106,4 @@ The models are based on the [Message-Passing Neural Network (MPNN) of Gilmer et 
 
 Assessing the performance of the model requires assessing the error within clusters of the same size. For example, we achieve an MAE of 1.23 kcal/mol and an R<sup>2</sup> of greater than 0.99 when measured across the whole dataset, but only a R<sup>2</sup> for clusters of 30 water molecules.
 
-<img src="./img/mpnn-performance.png" alt="mpnn-performance" width=50%/>
+![mpnn-performance](./img/mpnn-performance.png)
