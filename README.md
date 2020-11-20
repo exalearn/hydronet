@@ -1,6 +1,8 @@
 # HydroNet
 
-This directory holds notebooks that illustrate how to use the HydroNet Challenge Data
+This directory holds notebooks that illustrate how to use the HydroNet Challenge Data.
+
+See https://exalearn.github.io/hydronet/ for more details
 
 ## Installation
 
