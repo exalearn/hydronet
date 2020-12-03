@@ -51,7 +51,7 @@ The bonding network of a water cluster defines its 3D geometry. Eliminating the 
 
 We present two versions: 
 
-1. One node _per atom_ and bonds define covalent or hydrogen bonds. *Prefix*: `atomic_`
+- One node _per atom_ and bonds define covalent or hydrogen bonds. *Prefix*: `atomic_`
 
 ```json
 {
@@ -68,7 +68,9 @@ We present two versions:
 }
 ```
 
-2. One node _per water_ and bonds define whether water donates or accepts a hydrogen bond. *Prefix*: `coarse_`
+where atom type 0 is an Oxygen and type 1 is a Hydrogen, and bond type 0 is a covalent and type 1 is a hydrogen bond.
+
+- One node _per water_ and bonds define whether water donates or accepts a hydrogen bond. *Prefix*: `coarse_`
 
 ```json
 {
@@ -81,6 +83,8 @@ We present two versions:
     "energy": -15.9416428
 }
 ```
+where bond type 0 denotes donating a hydrogen bond and type 1 donates accepting a bond.
+
 
 ### Challenge 3: Generating Low-Energy Clusters
 
