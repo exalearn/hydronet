@@ -12,7 +12,7 @@ if [ $? != 0 ]; then
 fi
 
 # Get the id of the local endpoint
-if [ $# == 2 ]; then
+if [ $# == 1 ]; then
     # Use a user-supplied
     my_endpoint=$1
 else
@@ -38,4 +38,3 @@ echo "Writing data to $data_path"
 # Start the transfer
 globus transfer --label hydronet -r $download_endpoint:$download_path $my_endpoint:$data_path
 echo "Transfer has started. Go to http://app.globus.org/activity to track status."
-
