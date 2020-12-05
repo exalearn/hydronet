@@ -1,0 +1,43 @@
+FC=gfortran
+SRC=$(addprefix ./, \
+	model_mod.f90 \
+	ttm2f_mod.f90 \
+	ttm3f_mod.f90 \
+	nasa_mod.f90 \
+	math.f90 \
+	smear.f90 \
+	read_conf.f90 \
+	nasa.f90 \
+	potential_mod.f90 \
+	dfpmin.f90)
+
+OBJ=$(addprefix ./, \
+	model_mod.o \
+	ttm2f_mod.o \
+	ttm3f_mod.o \
+	nasa_mod.o \
+	math.o \
+	smear.o \
+	read_conf.o \
+	nasa.o \
+	potential_mod.o \
+	dfpmin.o)
+
+EXE=pot_ttm.a
+
+FFLAGS=-O2 -fPIC
+LFLAGS=-O2 -fPIC -shared
+
+all: $(OBJ)
+	        $(FC) -o $(EXE) $(LFLAGS) $(OBJ)  
+
+$(OBJ) : Makefile
+
+%.o:%.f90
+	        $(FC) $(FFLAGS) $(DEFS) $(INCLUDE_PATH) -c $< -o $@
+%.o:%.F90
+	        $(FC) $(FFLAGS) $(DEFS) $(INCLUDE_PATH) -c $< -o $@
+
+
+clean: 
+	rm -rf $(OBJ) *.o *.mod 
