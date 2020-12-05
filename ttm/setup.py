@@ -1,15 +1,5 @@
 from numpy.distutils.core import Extension
-from urllib.request import urlretrieve
-from zipfile import ZipFile
-from glob import glob
 import os
-
-# Download TTM Fortran code if need be
-_ttm_url = 'https://sites.uw.edu/wdbase/files/2019/01/pot_ttm-1p9hi7d.zip'
-if not os.path.isdir('pot_ttm'):
-    urlretrieve(_ttm_url, 'ttm.zip')
-    with ZipFile('ttm.zip') as fp:
-        fp.extractall(".")
 
 # Write out the extension
 ext = Extension(name='ttm.flib',
