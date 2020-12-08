@@ -14,8 +14,8 @@ def parse_records(example_proto):
     """Parse data from the TFRecord"""
     features = {
         'energy': tf.io.FixedLenFeature([], tf.float32, default_value=np.nan),
-        'n_atom': tf.io.FixedLenFeature([], tf.int64),
-        'n_bond': tf.io.FixedLenFeature([], tf.int64),
+        'n_atoms': tf.io.FixedLenFeature([], tf.int64),
+        'n_bonds': tf.io.FixedLenFeature([], tf.int64),
         'connectivity': tf.io.VarLenFeature(tf.int64),
         'atom': tf.io.VarLenFeature(tf.int64),
         'bond': tf.io.VarLenFeature(tf.int64),
@@ -37,10 +37,10 @@ def combine_graphs(batch):
     """Combine multiple graphs into a single network"""
 
     # Compute the mappings from bond index to graph index
-    batch_size = tf.size(batch['n_atom'], name='batch_size')
+    batch_size = tf.size(batch['n_atoms'], name='batch_size')
     mol_id = tf.range(batch_size, name='mol_inds')
-    batch['node_graph_indices'] = repeat(mol_id, batch['n_atom'], axis=0)
-    batch['bond_graph_indices'] = repeat(mol_id, batch['n_bond'], axis=0)
+    batch['node_graph_indices'] = repeat(mol_id, batch['n_atoms'], axis=0)
+    batch['bond_graph_indices'] = repeat(mol_id, batch['n_bonds'], axis=0)
 
     # Reshape the bond, connectivity, and node lists
     for c in ['atom', 'bond', 'connectivity']:
@@ -55,8 +55,8 @@ def combine_graphs(batch):
         batch[c].set_shape((None,))
 
     # Compute offsets for the connectivity matrix
-    offset_values = tf.cumsum(batch['n_atom'], exclusive=True)
-    offsets = repeat(offset_values, batch['n_bond'], name='offsets', axis=0)
+    offset_values = tf.cumsum(batch['n_atoms'], exclusive=True)
+    offsets = repeat(offset_values, batch['n_bonds'], name='offsets', axis=0)
     batch['connectivity'] += tf.expand_dims(offsets, 1)
 
     return batch
