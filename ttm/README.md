@@ -31,4 +31,14 @@ pip install -e .
 
 ## Usage
 
-TBD. Going to revamp to use the ASE Calculator interface.
+We recommend using the TTM potential through the [ASE Calculator](https://wiki.fysik.dtu.dk/ase/ase/calculators/calculators.html)
+interface provided by this package.
+
+```python
+from ttm.ase import TTMCalculator
+import ase
+
+atoms = ase.Atoms()
+calc = TTMCalculator()
+energy = calc.get_potential_energy(atoms)
+```
