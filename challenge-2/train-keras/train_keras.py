@@ -133,7 +133,7 @@ if __name__ == "__main__":
     y_true = []
     n_waters = []
     for batch in test_loader:
-        n_waters.append(batch[0]['n_atom'] // 3 if args.network_choice == 'atomic' else batch[0]['n_atom'])
+        n_waters.append(batch[0]['n_atoms'] // 3 if args.network_choice == 'atomic' else batch[0]['n_atoms'])
         y_true.append(batch[1])
     y_true = np.concatenate(y_true, axis=0)[:, 0]
     n_waters = np.hstack(n_waters)
