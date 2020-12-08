@@ -55,7 +55,7 @@ def infer_water_cluster_bonds(atoms):
                 h_hbond = coords[indexH, :]
                 o_hbond = coords[indexO, :]
 
-                # Compute wehther they are bonded
+                # Compute whether they are bonded
                 dist = np.linalg.norm(h_hbond - o_hbond)
                 if (dist > 1) & (dist < 2.8):
                     angle = np.arccos(np.dot(roh, v) / (np.linalg.norm(roh) * np.linalg.norm(v))) * (180.0 / np.pi)
@@ -143,7 +143,7 @@ def coarsen_graph(in_graph: nx.Graph) -> nx.DiGraph:
 
 def make_entry(atoms) -> dict:
     """Create a database record for a water cluster
-    i ad
+
     Args:
         atoms (Atoms): ASE Atoms object
     Returns:
@@ -250,12 +250,13 @@ def create_inputs_from_nx(g: nx.Graph, atom_types: Dict[str, int],
     connectivity = np.array(connectivity)
     inds = np.lexsort((connectivity[:, 1], connectivity[:, 0]))
     connectivity = connectivity[inds, :]
+    edge_type_id = np.array(edge_type_id)[inds].tolist()
 
     return {
         # Determine number of waters based on whether single node or 3 nodes per water
         'n_waters': len(atom_type) if is_digraph else len(atom_type) // 3,
-        'n_atom': len(atom_type),
-        'n_bond': len(edge_type),
+        'n_atoms': len(atom_type),
+        'n_bonds': len(edge_type),
         'atom': atom_type_id,
         'bond': edge_type_id,
         'connectivity': connectivity.tolist()
