@@ -3,20 +3,21 @@
 from typing import Union
 
 import networkx as nx
+import ase
 
 
 def graph_from_dict(record: dict) -> Union[nx.Graph, nx.DiGraph]:
     """Generate a networkx object from a dictionary describing a graph
     
     Args:
-        record (dict): Record to restore from a graph
+        record (dict): Record from which to restore a graph
     Returns:
         A nx.Graph with all atoms for the "atomic" graph or
         a nx.DiGraph with only waters for the "coarse" graph
     """
     
     # Detect if it is a coarse graph
-    is_coarse = record['n_water'] == record['n_atom']
+    is_coarse = record['n_waters'] == record['n_atoms']
     
     # Make the graph
     graph = nx.DiGraph() if is_coarse else nx.Graph()
@@ -34,3 +35,22 @@ def graph_from_dict(record: dict) -> Union[nx.Graph, nx.DiGraph]:
         graph.add_edge(a, b, label=label)
         
     return graph
+
+
+def atoms_from_dict(record: dict) -> ase.Atoms:
+    """Generate an ASE Atoms object from the graph dictionary
+
+    Args:
+        record: Record from which to generate an Atoms object
+    Returns:
+        atoms: The Atoms object
+    """
+    # Make the atoms object
+    atoms = ase.Atoms(positions=record['coords'], numbers=record['z'])
+
+    # Add energy, if available
+    if 'energy' in record:
+        calc = ase.calculators.singlepoint.SinglePointCalculator(atoms, energy=record['energy'])
+        atoms.set_calculator(calc)
+
+    return atoms
