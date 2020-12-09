@@ -2,6 +2,7 @@
 
 from typing import Union
 
+from ase.calculators.singlepoint import SinglePointCalculator
 import networkx as nx
 import ase
 
@@ -50,7 +51,7 @@ def atoms_from_dict(record: dict) -> ase.Atoms:
 
     # Add energy, if available
     if 'energy' in record:
-        calc = ase.calculators.singlepoint.SinglePointCalculator(atoms, energy=record['energy'])
+        calc = SinglePointCalculator(atoms, energy=record['energy'])
         atoms.set_calculator(calc)
 
     return atoms
