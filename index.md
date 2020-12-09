@@ -96,13 +96,13 @@ The number of possible water clusters explodes combinatorially with the number o
 
 We provide a few example solutions along with the data.
 
-## Challenge 1
+### Challenge 1
 
 We’ve published in the [Journal of Chemical Physics](https://aip.scitation.org/doi/10.1063/5.0009933) and provide [an implementation](https://github.com/exalearn/molecular-graph-descriptors) of an example solution for Challenge 1. 
 
 The model is based on the Continuous-Filter Convolutional Neural Network (i.e., [SchNet](https://aip.scitation.org/doi/10.1063/1.5019779)), as implemented via [SchNetPack](https://schnetpack.readthedocs.io/), and was analyzed using graph-theoretical descriptors. Code for the computation of which is also provided [on GitHub](https://github.com/exalearn/molecular-graph-descriptors).
 
-## Challenge 2
+### Challenge 2
 
 Our [GitHub repository](https://github.com/exalearn/hydronet) provides example solutions for Challenge 2.
 
