@@ -1,19 +1,74 @@
 """Functions for inverting a structure from graph to coordinates"""
 
+from ase.calculators.calculator import Calculator, all_changes
+from ase.optimize.bfgs import BFGS
 import networkx as nx
 import numpy as np
 import ase
+import os
 
 _h20_bond_angle = 2 * np.pi * 104.5 / 360
 
 
-def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5) -> ase.Atoms:
+class HarmonicCalculator(Calculator):
+    """Calculator where certain atoms are connected by a linear spring
+    
+    Parameters
+    ----------
+    graph: nx.Graph
+        Bonding graph of the network
+    r: float
+        Desired bond length
+    k: float
+        Bond strength
+    """
+    
+    implemented_properties = ['forces', 'energy']
+    default_parameters = {'graph': None, 'r': 1., 'k': 1.}
+    nolabel = True
+    
+    def calculate(
+        self, atoms=None, properties=None, system_changes=all_changes,
+    ):
+        # Call the base class
+        if properties is None:
+            properties = self.implemented_properties
+
+        Calculator.calculate(self, atoms, properties, system_changes)
+        
+        # Loop over all nodes in the graph
+        assert self.parameters.graph is not None, "You must define the adjacency matrix"
+        forces = np.zeros((len(atoms), 3))
+        energy = 0
+        for i, center in enumerate(atoms.positions):
+            # Get the bonded atoms
+            bonds = list(self.parameters.graph[i].keys())
+            
+            # Compute the displacement vectors and distances
+            disps = atoms.positions[bonds, :] - center[None, :]
+            dists = np.linalg.norm(disps, axis=1)
+            energy += 0.5 * self.parameters.k * np.power(dists - self.parameters.r, 2).sum()
+            
+            # Compute the forces
+            forces[i, :] = np.sum((self.parameters.k * (dists - self.parameters.r) / dists)[:, None] * disps, axis=0)
+            
+        # Store the outputs
+        self.results['energy'] = energy / 2
+        self.results['forces'] = forces
+
+
+def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5, 
+                                  hbond_distance: float = 2.9, relax_with_harmonic: bool = False) -> ase.Atoms:
     """Generate initial coordinates for water cluster from the directed graph of bonded waters
 
     Args:
         graph: Directed graph of how waters are bonded
         n_h_guesses: Number of guesses to make for each hydrogen position.
             We select the one that is farthest from all other atoms
+        hbond_distance: Target oxygen-to-oxygen hydrogen bond distance
+        relax_with_harmonic: Whether to relax the structure with a harmonic potential
+            before adding hydrogens. Experimental feature.
+        
     Returns:
         Atoms object describing candidate position of hydrogens
     """
@@ -25,12 +80,21 @@ def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5) -> as
     pos = np.array([pos[i] for i in range(len(pos))])  # From a dict
     
     # Expand so that most bonds are longer than 2.9 A
-    #  TODO: (wardlt) Make this bond distance configurable
     bond_lengths = []
     for a, b in graph.edges:
         bond_lengths.append(np.linalg.norm(pos[a] - pos[b]))
-    scale_factor = 2.9 / np.percentile(bond_lengths, 25)
+    scale_factor = hbond_distance / np.percentile(bond_lengths, 25)
     pos *= scale_factor
+    
+    # Relax with a harmonic potential
+    if relax_with_harmonic:
+        calc = HarmonicCalculator(graph=graph.to_undirected(), r=hbond_distance)
+        # TODO (wardlt): We likely need a simple repulsion to prevent overlap (as is used in nx.spring_layout)
+        o_atoms = ase.Atoms(positions=pos)
+        o_atoms.set_calculator(calc)
+        opt = BFGS(o_atoms, logfile=os.devnull)
+        opt.run()
+        pos = o_atoms.positions.copy()
     
     # Make a map of oxygen index to covalently-bonded hydrogens
     h_map = [[] for _ in range(pos.shape[0])]
@@ -64,7 +128,7 @@ def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5) -> as
         
         # If you have two hydrogens, no more to place
         if len(my_h) == 2:
-            # TODO (wardlt): Force the angle to be ~106.5
+            # TODO (wardlt): Force the angle to be ~106.5, rotating each bond towards each other
             continue
         
         # If you have none, first place one randomly
