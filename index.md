@@ -111,3 +111,9 @@ The models are based on the [Message-Passing Neural Network (MPNN) of Gilmer et 
 Assessing the performance of the model requires assessing the error within clusters of the same size. For example, we achieve an MAE of 1.23 kcal/mol and an R<sup>2</sup> of greater than 0.99 when measured across the whole dataset, but only a R<sup>2</sup> for clusters of 30 water molecules.
 
 ![mpnn-performance](./img/mpnn-performance.png)
+
+## Citing HydroNet
+
+The following paper describes more about HydroNet and is the preferred citation for this benchmark.
+
+Choudhury et al. "HydroNet: Benchmark Tasks for Preserving Long-range Interactions and Structural Motifs in Predictive and Generative Models for Molecular Data." in 34th Conference on Neural Information Processing Systems (NuerIPS), Workshop on Machine Learning and the Physical Sciences [[arXiV]](https://arxiv.org/abs/2012.00131)
