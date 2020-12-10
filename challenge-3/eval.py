@@ -10,7 +10,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-data', required=True, type=str, help="Test data.")
-parser.add_argument('-gt', default='./groundtruth/features.csv', type=str, help="Ground truth data for comparison.")
+parser.add_argument('-gt', default='../data/output/features.csv', type=str, help="Ground truth data for comparison.")
 parser.add_argument('-datatype', default='xyz', type=str, help="Data type: xyz or graph")
 parser.add_argument('-size', default=0, type=int, help="Cluster size to analyze")
 parser.add_argument('-stat', default='ks', type=str, help="kl or js divergence; ks statistic; wd for Wasserstein distance")

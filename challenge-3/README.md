@@ -1,15 +1,18 @@
-# Challenge 3:  Generating Low-Energy Clusters
+# Challenge 3: Generating Low-Energy Clusters
 
 The number of possible water clusters explodes combinatorially with the number of water molecules. 
 Finding the lowest-energy structures in this space is a grand challenge in science.
 
-Here we provide a script to evaluate generated clusters. The file features.csv must be downloaded to the groundtruth folder.
-
+Here we provide a script to evaluate generated clusters by assessing whether their bonding structures are similar to known water clusters.
+The "eval.py" script reads in a set of water clusters provided by you and measures the different between their distribution 
+graph properties to a reference set of known water molecules.
 
 ### Running the script
 eval.py supports two formats for your data:
 * xyz format with coordinates in Angstroms
 * graph format as given in the Hydronet dataset
+
+The file with statistics of known clusters, `features.csv` must be downloaded to `data/output` folder.
 
 #### xyz format
 ```
