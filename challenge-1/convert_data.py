@@ -31,9 +31,15 @@ os.makedirs("data", exist_ok=False)
 
 # Loop over each file
 for file in files:
-    # Make the output file
+    # Get a name for this run
     name = os.path.basename(file)[5:-8]
-    data = AtomsData(os.path.join(f"data/{name}.db"), available_properties=['energy'])
+    if name in ['train', 'valid']:
+        data_path = "./data/train.db"
+    else:
+        data_path = "./data/test.db"
+
+    # Make the output file
+    data = AtomsData(data_path, available_properties=['energy'])
 
     # Convert every cluster in the dataset
     with Pool() as pool:
@@ -48,7 +54,7 @@ for file in files:
                 atoms = pool.map(atoms_from_dict, records)
 
                 # Extract the energies
-                properties = [{'energy': np.array(a.get_potential_energy())} for a in atoms]
+                properties = [{'energy': np.array([a.get_potential_energy()])} for a in atoms]
 
                 # Add to the output
                 data.add_systems(atoms, properties)
