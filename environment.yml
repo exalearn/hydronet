@@ -2,10 +2,12 @@ name: hydronet
 channels:
   - defaults
   - conda-forge
+  - pytorch
 dependencies:
   - python==3.*
   - tensorflow-gpu==2.2.*
   - ase==3.19.*
+  - pytorch>=0.4.1
   - networkx==2.4.*
   - pandas==0.25.*
   - scikit-learn==0.22.*
@@ -17,4 +19,5 @@ dependencies:
   - pip
   - pip:
       - globus-cli
+      - schnetpack
       - -e .  # The graphsage libraries in development mode
