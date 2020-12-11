@@ -4,6 +4,7 @@ from ase.calculators.calculator import Calculator, all_changes
 from ase.optimize.bfgs import BFGS
 import networkx as nx
 import numpy as np
+from math import sqrt
 import ase
 import os
 
@@ -209,3 +210,80 @@ def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5,
     atoms = ase.Atoms(symbols=symbols, positions=pos)
     
     return atoms
+
+
+
+
+
+def rigid_transform_3D(A, B):
+    # Input: expects 3xN matrix of points
+    # Returns R,t
+    # R = 3x3 rotation matrix
+    # t = 3x1 column vector
+    assert A.shape == B.shape
+
+    num_rows, num_cols = A.shape
+    if num_rows != 3:
+        raise Exception(f"matrix A is not 3xN, it is {num_rows}x{num_cols}")
+
+    num_rows, num_cols = B.shape
+    if num_rows != 3:
+        raise Exception(f"matrix B is not 3xN, it is {num_rows}x{num_cols}")
+
+    # find mean column wise
+    centroid_A = np.mean(A, axis=1)
+    centroid_B = np.mean(B, axis=1)
+
+    # ensure centroids are 3x1
+    centroid_A = centroid_A.reshape(-1, 1)
+    centroid_B = centroid_B.reshape(-1, 1)
+
+    # subtract mean
+    Am = A - centroid_A
+    Bm = B - centroid_B
+
+    H = Am @ np.transpose(Bm)
+
+    # sanity check
+    #if linalg.matrix_rank(H) < 3:
+    #    raise ValueError("rank of H = {}, expecting 3".format(linalg.matrix_rank(H)))
+
+    # find rotation
+    U, S, Vt = np.linalg.svd(H)
+    R = Vt.T @ U.T
+
+    # special reflection case
+    if np.linalg.det(R) < 0:
+        #print("det(R) < R, reflection detected!, correcting for it ...")
+        Vt[2,:] *= -1
+        R = Vt.T @ U.T
+
+    t = -R@centroid_A + centroid_B
+
+    return R, t
+
+
+def RMSE_align(A, B, n=3):
+    ''' 
+    Given two sets of 3D points and their correspondence the algorithm will return a 
+    least square optimal rigid transform (also known as Euclidean) between the two sets. 
+    The transform solves for 3D rotation and 3D translation, no scaling.
+
+    Amended from: https://github.com/nghiaho12/rigid_transform_3D
+    "Least-Squares Fitting of Two 3-D Point Sets", Arun, K. S. and Huang, T. S. and Blostein, S. D, 
+    IEEE Transactions on Pattern Analysis and Machine Intelligence, Volume 9 Issue 5, May 1987  
+    '''
+    # Recover R and t
+    A = np.array(A).T
+    B = np.array(B).T
+    ret_R, ret_t = rigid_transform_3D(A, B)
+
+    # Compare the recovered R and t with the original
+    B2 = (ret_R@A) + ret_t
+
+    # Find the root mean squared error
+    err = B2 - B
+    err = err * err
+    err = np.sum(err)
+    rmse = np.sqrt(err/n)
+    return rmse
