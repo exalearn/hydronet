@@ -7,6 +7,46 @@ import networkx as nx
 import ase
 
 
+def graph_is_valid(graph: Union[nx.Graph, nx.DiGraph], coarse: bool) -> bool:
+    """Check whether a graph is valid. E.g., it has the expected bond types, number of nodes, etc.
+
+    Args:
+        graph: Graph to be checked
+        coarse: Whether the graph is coarse or atomic
+    Returns:
+         (bool) Whether the graph is valid
+    """
+
+    if coarse:
+        # Make sure that the graph is directional
+        if not graph.is_directed():
+            return False
+
+        # Make sure the node IDs are between [0, N) (N == number of nodes)
+        if set(graph.nodes) != set(range(graph.number_of_nodes())):
+            return False
+
+        # Check that all nodes are bonded and that every bond has a matching pair of donor/acceptor
+        for node in graph.nodes:
+            # Check the number of edges
+            edges = graph[node]
+            if len(edges) == 0:
+                return False
+
+            # Check the bonds
+            for b in edges:
+                if b == node:
+                    return False  # No self-bonding
+                out_type = graph.get_edge_data(node, b)['label']
+                in_type = graph.get_edge_data(b, node)['label']
+                if {out_type, in_type} != {'donate', 'accept'}:
+                    return False
+    else:
+        raise NotImplementedError()
+
+    return True
+
+
 def graph_from_dict(record: dict) -> Union[nx.Graph, nx.DiGraph]:
     """Generate a networkx object from a dictionary describing a graph
     

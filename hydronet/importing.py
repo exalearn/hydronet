@@ -1,6 +1,6 @@
 """Utilities related to reading water cluster networks from disk"""
 
-from typing import Dict
+from typing import Dict, Union
 
 from ase import data
 import tensorflow as tf
@@ -206,14 +206,26 @@ def make_nfp_network(atoms, coarsen: bool = False):
         g = coarsen_graph(g)
 
     # Write it to a dictionary
-    entry = create_inputs_from_nx(g, _atom_type_lookup,
-                                  _coarse_bond_type_lookup if coarsen else _bond_type_lookup)
+    entry = _create_inputs_from_nx(g, _atom_type_lookup,
+                                   _coarse_bond_type_lookup if coarsen else _bond_type_lookup)
     entry['energy'] = atoms.get_potential_energy()
     return entry
 
 
-def create_inputs_from_nx(g: nx.Graph, atom_types: Dict[str, int],
-                          bond_types: Dict[str, int]) -> dict:
+def create_inputs_from_nx(g: Union[nx.Graph, nx.DiGraph]) -> dict:
+    """Turn a graph into an MPNN-ready input format
+
+    Args:
+        g: Graph to convert
+    Returns:
+        Input as an MPNN-format dictionary
+    """
+    return _create_inputs_from_nx(g, _atom_type_lookup,
+                                  _coarse_bond_type_lookup if isinstance(g, nx.DiGraph) else _bond_type_lookup)
+
+
+def _create_inputs_from_nx(g: nx.Graph, atom_types: Dict[str, int],
+                           bond_types: Dict[str, int]) -> dict:
     """Create a NFP-compatible input dictionary from from a Networkx object
 
     Args:
@@ -221,7 +233,7 @@ def create_inputs_from_nx(g: nx.Graph, atom_types: Dict[str, int],
         atom_types: Dictionary of atom types to label
         bond_types: Dictionary of bond types to label
     Returns:
-        (dict) Input as a network as a networkx object
+        (dict) Input as an MPNN-format dictionary
     """
 
     # Get the atom types
