@@ -42,3 +42,18 @@ atoms = ase.Atoms()
 calc = TTMCalculator()
 energy = calc.get_potential_energy(atoms)
 ```
+
+We also provide an implementation for geometry relaxation using 
+the TTM potential and the scipy.optimize.minimize function with
+an ase wrapper. Running the dynamics updates the ase Atoms
+object, can then be passed to the TTMCalculator.
+
+
+```python
+from ttm import SciPyFminLBFGSB
+import ase
+
+atoms = ase.Atoms()
+dyn = SciPyFminLBFGSB(atoms)
+dyn.run(fmax=1e-2)
+```
