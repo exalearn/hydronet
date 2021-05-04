@@ -50,7 +50,7 @@ object, can then be passed to the TTMCalculator.
 
 
 ```python
-from ttm import SciPyFminLBFGSB
+from ttm.ase import SciPyFminLBFGSB
 import ase
 
 atoms = ase.Atoms()
