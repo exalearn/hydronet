@@ -50,10 +50,13 @@ object, can then be passed to the TTMCalculator.
 
 
 ```python
-from ttm.ase import SciPyFminLBFGSB
+from ttm.ase import SciPyFminLBFGSB, TTMCalculator
 import ase
 
 atoms = ase.Atoms()
+calc = TTMCalculator()
+atoms.calc = calc
 dyn = SciPyFminLBFGSB(atoms)
 dyn.run(fmax=1e-2)
+relaxed_energy = calc.get_potential_energy(atoms)
 ```
