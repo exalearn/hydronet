@@ -3,7 +3,7 @@
 This directory contains a Python wrapper for the TTM iteraction potential for water.
 
 The TTM wrapper was originally developed by Joseph Heindal and packaged for distribution by Logan Ward.
-The geometry optimization code was developed by Jenna Pope.
+The geometry optimization code was developed by Jenna (Bilbrey) Pope.
 
 ## Requirements
 
