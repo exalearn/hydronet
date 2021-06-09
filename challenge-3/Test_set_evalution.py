@@ -13,14 +13,14 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-data', required=True, type=str, help="Test data.")
-parser.add_argument('-gt', default='/data/output/feature_1kcal.csv', type=str, help="Ground truth data for comparison.")
+parser.add_argument('-datatype', default='xyz', type=str, help="Data type: xyz or graph")
 parser.add_argument('--N', default=12, type=int, help="cluster size")
 parser.add_argument('--stat', default='wd', type=str, help="stat to use")
 args = parser.parse_args()
 
 
 # Load test set data
-stat_info, summary = eva_pipeline.main(args.data,'xyz', args.N, args.stat)
+stat_info, summary = eva_pipeline.main(args.data,args.datatype, args.N, args.stat)
 cwd = os.getcwd()
 plot_output = op.join(cwd, 'Plots')
 
