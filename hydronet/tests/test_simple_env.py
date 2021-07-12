@@ -1,6 +1,7 @@
+"""Test the OpenAI Gym environment"""
 from pytest import fixture
 
-from hydronet.rl.envs.simple import WaterCluster
+from hydronet.rl.envs.gym import WaterCluster
 
 
 @fixture
@@ -38,6 +39,3 @@ def test_stepping(env: WaterCluster):
     move = env.action_space.sample()
     assert move in env.action_space
     assert 3 in move
-
-
-

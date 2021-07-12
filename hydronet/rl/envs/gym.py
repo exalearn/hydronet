@@ -1,4 +1,5 @@
-from typing import List, Sequence, Tuple
+"""Environments listed as OpenAI gyms"""
+from typing import List, Tuple
 
 import networkx as nx
 import logging

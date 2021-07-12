@@ -15,7 +15,7 @@ class WaterClusterActions(Space):
     We provide a
 
     The space of possible actions changes with the state of the system. Call :meth:`update_actions` to adjust the
-    action space occ
+    action space based on the current graph.
     """
 
     def __init__(self):
@@ -36,7 +36,6 @@ class WaterClusterActions(Space):
         # Choose an acceptor
         acceptor_choices = set(i for i, x in enumerate(self.get_acceptor_mask()) if x and i != donor)
         if donor < len(self.current_state) and self.current_state.degree[donor] > 0:
-            print(list(self.current_state.neighbors(donor)))
             acceptor_choices.difference_update(list(self.current_state.neighbors(donor)))
         acceptor = self.np_random.choice(list(acceptor_choices))
 
@@ -50,12 +49,12 @@ class WaterClusterActions(Space):
         Returns:
             Whether each atom is able to donate a hydrogen bond
         """
-        output = [True] * self.n
+        output = [True] * (self.n + 1)
         for node in self.current_state:
             bonds = len(list(i for i, j, d in self.current_state.edges(node, data=True) if d['label'] == 'donate'))
             if bonds >= 2:
                 output[node] = False
-        return output
+        return output + [True]
 
     def get_acceptor_mask(self) -> List[bool]:
         """Get whether each atom in the graph are able to accept bonds
@@ -65,7 +64,7 @@ class WaterClusterActions(Space):
         Returns:
             Whether each atom is able to accept a hydrogen bond
         """
-        output = [True] * self.n
+        output = [True] * (self.n + 1)
         for node in self.current_state:
             bonds = len(list(i for i, j, d in self.current_state.edges(node, data=True) if d['label'] == 'accept'))
             if bonds >= 2:

@@ -1,6 +1,6 @@
 
 # TODO (wardlt): Switch to ExaRL or TF-Agents spec for agents
-from hydronet.rl.envs.simple import WaterCluster
+from hydronet.rl.envs.gym import WaterCluster
 
 
 class BaseAgent:
@@ -11,7 +11,7 @@ class BaseAgent:
 
 
 class RandomAgent(BaseAgent):
-    """Pick moves randomly"""
+    """Pick moves randomly, never stop explicitly"""
 
     def action(self, env: WaterCluster):
-        return env.action_space.sample()
+        return list(env.action_space.sample())
