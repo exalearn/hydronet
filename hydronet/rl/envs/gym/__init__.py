@@ -7,7 +7,7 @@ import gym
 
 from .actions import WaterClusterActions
 from .spaces import AllValidClusters
-from .rewards import RewardFunction, BondCountReward
+from ..rewards import RewardFunction, BondCountReward
 
 logger = logging.getLogger(__name__)
 
