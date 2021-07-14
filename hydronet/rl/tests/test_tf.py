@@ -33,7 +33,7 @@ def test_specs(env: SimpleEnvironment):
 def test_stepping(env: SimpleEnvironment):
     env.maximum_size = 3
 
-    # Add a new water
+    # Re-add a bond
     step = env.step((0, 1))
     assert graph_is_valid(env.get_state(), coarse=True)
     assert step.reward == 1
@@ -56,3 +56,27 @@ def test_stepping(env: SimpleEnvironment):
     assert graph_is_valid(env.get_state(), coarse=True)
     assert step.reward == 4
     assert step.step_type == ts.StepType.LAST
+
+    # Add an invalid step, make sure it kills the episode
+    env.reset()
+    assert graph_is_valid(env.get_state(), coarse=True)
+
+    step = env.step((0, 0))
+    assert not graph_is_valid(env.get_state(), coarse=True)
+    assert step.reward == 0
+    assert step.step_type == ts.StepType.LAST
+
+    # Test a move that creates a second water cluster
+    env.reset()
+    assert graph_is_valid(env.get_state(), coarse=True)
+
+    step = env.step((2, 3))
+    assert step.step_type == ts.StepType.LAST
+    assert step.reward == 0
+
+    # Flip a bond, which is OK as long as it doesn't break other rules
+    env.reset()
+
+    step = env.step((1, 0))
+    assert step.step_type == ts.StepType.MID
+    assert step.reward == 1

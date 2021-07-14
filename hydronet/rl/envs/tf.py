@@ -1,4 +1,5 @@
 from typing import Dict, Any
+import logging
 
 import numpy as np
 from tf_agents.environments.py_environment import PyEnvironment
@@ -8,8 +9,11 @@ from tf_agents.typing import types
 import tensorflow as tf
 import networkx as nx
 
+from hydronet.data import graph_is_valid
 from hydronet.importing import create_inputs_from_nx
 from hydronet.rl.envs.rewards import RewardFunction, BondCountReward
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleEnvironment(PyEnvironment):
@@ -88,12 +92,37 @@ class SimpleEnvironment(PyEnvironment):
     def _step(self, action: types.NestedArray) -> ts.TimeStep:
         # Add a new node if needed
         donor, acceptor = action
-        if max(donor, acceptor) == len(self._state):
-            self._state.add_node(len(self._state), label='O')
+
+        # Check that at least one of the atoms is not in the graph
+        if sum(i in self._state.nodes for i in action) == 0:
+            logger.warning('At least one atom must be in the graph')
+            return ts.termination(
+                self.get_state_as_tensors(),
+                reward=0
+            )
+
+        if max(donor, acceptor) >= len(self._state):
+            # Add a new node
+            new_id = len(self._state)
+            self._state.add_node(new_id, label='O')
+
+            # Record the id of the new water. Ensures
+            if donor > acceptor:
+                donor = new_id
+            else:
+                acceptor = new_id
 
         # Update the water cluster
         self._state.add_edge(donor, acceptor, label='donate')
         self._state.add_edge(acceptor, donor, label='accept')
+
+        # Check if the graph is valid
+        if not graph_is_valid(self._state, coarse=True):
+            logger.warning('Action created an invalid graph.')
+            return ts.termination(
+                self.get_state_as_tensors(),
+                reward=0
+            )
 
         # Compute the reward and if we are done
         reward = self.reward_fn(self._state)
