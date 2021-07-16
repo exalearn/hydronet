@@ -22,8 +22,9 @@ def test_initialize(env: SimpleEnvironment):
     # Test the observation space
     obs = env.current_time_step().observation
     assert obs['n_atoms'] == 2
-    assert np.all(obs['atom'] == [0] * 11)
+    assert np.all(obs['atom'] == [0] * 12)
     assert np.all(obs['connectivity'][0, :] == [0, 1])
+    assert np.all(obs['connectivity'][-1, :] == [11, 11])
 
 
 def test_specs(env: SimpleEnvironment):

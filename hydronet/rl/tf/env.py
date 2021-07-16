@@ -20,7 +20,20 @@ logger = logging.getLogger(__name__)
 class SimpleEnvironment(PyEnvironment):
     """Environment for gradually growing a water cluster. Terminates only when a maximum size has been met
 
-    The state is the state of the graph (i.e., atom types, bond types, connectivity).
+    The state is the state of the graph:
+
+        - ``n_atoms``: Number of atoms. We store this number so that you can determine which entries
+            of the connectivity matrix are actually placeholders
+        - ``atom_types``: Always 0's, as we currently support only water molecules
+        - ``bond_types``: Either 0 (donate) or 1 (accept)
+        - ``connectivity``: Defines the connectivity between water clusters (donor, acceptor).
+            There are many placeholder entries in here where both the donor and acceptor are
+            ``maximum_size + 1``. These are placeholders, which are needed because TF-agents
+            need fixed-size arrays, and set to ``maximum_size + 1`` to have tf.gather return
+            an array of the correct size.
+        - ``allowed_actions``: A matrix where [donor, acceptor] equals 1 if a move is allowed
+            and 0 otherwise
+
     """
 
     def __init__(self, reward: RewardFunction = None, maximum_size: int = 10,
@@ -48,8 +61,9 @@ class SimpleEnvironment(PyEnvironment):
     def observation_spec(self) -> types.NestedArraySpec:
         # TF-Agents require fixed size arrays. We know the number of bonds cannot be more than 4 times
         #  the number of atoms, as each water can only donate 2 bonds.
-        # We use 1 + the maximum number of atoms so that we can include a "ghost" atom ready to be added to the cluster
-        n = self.maximum_size + 1
+        # We use 2 + the maximum number of atoms so that we can include a "ghost" ready to be added to the cluster,
+        #  and a "collector" to donate and receive bonds placeholder bonds
+        n = self.maximum_size + 2
         return {
             'n_atoms': BoundedArraySpec((), minimum=0, dtype='int32'),
             'atom': BoundedArraySpec((n,), minimum=0, maximum=1, dtype='int32'),
@@ -66,12 +80,12 @@ class SimpleEnvironment(PyEnvironment):
         simple_graph = create_inputs_from_nx(self._state)
 
         # Build the buffered arrays
-        n = self.maximum_size + 1
+        n = self.maximum_size + 2
         output = {
             'n_atoms': simple_graph['n_atoms'],
             'atom': np.zeros((n,), dtype=np.int32),
             'bond': np.zeros((n * 4,), dtype=np.int32),
-            'connectivity': np.zeros((n * 4, 2), dtype=np.int32),
+            'connectivity': np.zeros((n * 4, 2), dtype=np.int32) + self.maximum_size + 1,
             'allowed_actions': self.get_valid_actions_as_matrix()
         }
         for i in ['atom', 'bond']:
