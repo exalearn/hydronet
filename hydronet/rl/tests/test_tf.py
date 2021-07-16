@@ -1,5 +1,6 @@
 """Test the OpenAI Gym environment"""
 from tf_agents.trajectories import time_step as ts
+import tensorflow as tf
 from pytest import fixture
 import numpy as np
 
@@ -26,8 +27,15 @@ def test_initialize(env: SimpleEnvironment):
 
 
 def test_specs(env: SimpleEnvironment):
-    assert len(env.time_step_spec()) == 4  # Just make sure it has 4 entries and builds correctly
+    # Just make sure it has 4 entries and builds correctly
+    assert len(env.time_step_spec()) == 4
     assert env.action_spec().shape == (2,)
+
+
+def test_states(env: SimpleEnvironment):
+    init_ts = env.get_state_as_tensors()
+    for k, v in init_ts.items():
+        assert isinstance(v, tf.Tensor), f'{k} is not a Tensor'
 
 
 def test_stepping(env: SimpleEnvironment):

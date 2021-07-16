@@ -50,7 +50,7 @@ class SimpleEnvironment(PyEnvironment):
         # We use 1 + the maximum number of atoms so that we can include a "ghost" atom ready to be added to the cluster
         n = self.maximum_size + 1
         return {
-            'n_atoms': BoundedArraySpec((1,), minimum=0, dtype='int32'),
+            'n_atoms': BoundedArraySpec((), minimum=0, dtype='int32'),
             'atom': BoundedArraySpec((n,), minimum=0, maximum=1, dtype='int32'),
             'bond': BoundedArraySpec((n * 4,), minimum=0, maximum=1, dtype='int32'),
             'connectivity': BoundedArraySpec((n * 4, 2), minimum=0, maximum=self.maximum_size, dtype='int32')
@@ -75,7 +75,7 @@ class SimpleEnvironment(PyEnvironment):
             output[i][:len(simple_graph[i])] = simple_graph[i]
         output['connectivity'][:len(simple_graph['connectivity']), :] = np.array(simple_graph['connectivity'])
 
-        return output
+        return dict((k, tf.convert_to_tensor(v)) for k, v in output.items())
 
     def get_state(self) -> Any:
         return self._state.copy()
