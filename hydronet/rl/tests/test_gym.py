@@ -1,7 +1,7 @@
-"""Test the OpenAI Gym environment"""Tensor.
+"""Test the OpenAI Gym environment"""
 from pytest import fixture
 
-from hydronet.rl.envs.gym import WaterCluster
+from hydronet.rl.gym.envs import WaterCluster
 
 
 @fixture

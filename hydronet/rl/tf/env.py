@@ -3,7 +3,6 @@ from typing import Dict, Any, List, Tuple
 import logging
 
 import numpy as np
-from networkx.classes.reportviews import NodeView
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.trajectories import time_step as ts
 from tf_agents.specs import BoundedArraySpec
@@ -13,7 +12,7 @@ import networkx as nx
 
 from hydronet.data import graph_is_valid
 from hydronet.importing import create_inputs_from_nx
-from hydronet.rl.envs.rewards import RewardFunction, BondCountReward
+from hydronet.rl.rewards import RewardFunction, BondCountReward
 
 logger = logging.getLogger(__name__)
 

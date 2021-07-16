@@ -1,12 +1,11 @@
 """Rewards based on a MPNN"""
-from typing import List
 
 import networkx as nx
 import tensorflow as tf
 from tensorflow.keras.models import Model
 
 from hydronet.importing import create_inputs_from_nx
-from hydronet.rl.envs.rewards import RewardFunction
+from hydronet.rl.rewards import RewardFunction
 from hydronet.mpnn.layers import custom_objects
 
 

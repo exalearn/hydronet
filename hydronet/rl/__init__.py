@@ -1,2 +1,2 @@
-"""Modules related to agents for building water clusters"""
+"""Modules related to RL agents for building water clusters"""
 

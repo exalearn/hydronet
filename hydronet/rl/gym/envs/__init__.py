@@ -5,9 +5,9 @@ import networkx as nx
 import logging
 import gym
 
-from .actions import WaterClusterActions
-from .spaces import AllValidClusters
-from ..rewards import RewardFunction, BondCountReward
+from hydronet.rl.gym.envs.actions import WaterClusterActions
+from hydronet.rl.gym.envs.spaces import AllValidClusters
+from hydronet.rl.rewards import RewardFunction, BondCountReward
 
 logger = logging.getLogger(__name__)
 

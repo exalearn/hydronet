@@ -5,7 +5,7 @@ from pytest import fixture
 import numpy as np
 
 from hydronet.data import graph_is_valid
-from hydronet.rl.envs.tf import SimpleEnvironment
+from hydronet.rl.tf.env import SimpleEnvironment
 
 
 @fixture
