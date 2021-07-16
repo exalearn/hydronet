@@ -54,7 +54,8 @@ class SimpleEnvironment(PyEnvironment):
             'n_atoms': BoundedArraySpec((), minimum=0, dtype='int32'),
             'atom': BoundedArraySpec((n,), minimum=0, maximum=1, dtype='int32'),
             'bond': BoundedArraySpec((n * 4,), minimum=0, maximum=1, dtype='int32'),
-            'connectivity': BoundedArraySpec((n * 4, 2), minimum=0, maximum=self.maximum_size, dtype='int32')
+            'connectivity': BoundedArraySpec((n * 4, 2), minimum=0, maximum=self.maximum_size, dtype='int32'),
+            'allowed_actions': BoundedArraySpec((n + 1, n + 1), minimum=0, maximum=1, dtype='int32')
         }
 
     def action_spec(self) -> types.NestedArraySpec:
@@ -70,7 +71,8 @@ class SimpleEnvironment(PyEnvironment):
             'n_atoms': simple_graph['n_atoms'],
             'atom': np.zeros((n,), dtype=np.int32),
             'bond': np.zeros((n * 4,), dtype=np.int32),
-            'connectivity': np.zeros((n * 4, 2), dtype=np.int32)
+            'connectivity': np.zeros((n * 4, 2), dtype=np.int32),
+            'allowed_actions': self.get_valid_actions_as_matrix()
         }
         for i in ['atom', 'bond']:
             output[i][:len(simple_graph[i])] = simple_graph[i]
@@ -196,7 +198,7 @@ class SimpleEnvironment(PyEnvironment):
         """
 
         # Initialize the output
-        size = self.maximum_size + 1
+        size = self.maximum_size + 2
         output = np.zeros((size, size), dtype='int32')
 
         # Store the valid moves
