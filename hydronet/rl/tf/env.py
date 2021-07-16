@@ -5,7 +5,7 @@ import logging
 import numpy as np
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.trajectories import time_step as ts
-from tf_agents.specs import BoundedArraySpec
+from tf_agents.specs import BoundedArraySpec, BoundedTensorSpec
 from tf_agents.typing import types
 import tensorflow as tf
 import networkx as nx
@@ -143,7 +143,7 @@ class SimpleEnvironment(PyEnvironment):
 
         # Compute the reward and if we are done
         reward = self.reward_fn(self._state)
-        done = len(self._state) > self.maximum_size
+        done = len(self._state) > self.maximum_size or len(self.get_valid_moves()) == 0
 
         # Compute the fingerprints for the state
         if done:
@@ -189,7 +189,8 @@ class SimpleEnvironment(PyEnvironment):
 
             # Populate the lists of possible donations
             if len(donating) < 2:  # Cannot donate more than twice
-                for other in range(len(self._state) + 1):
+                max_other = min(len(self._state) + 1, self.maximum_size + 1)
+                for other in range(max_other):
                     #  Cannot donate to self, somewhere it has already donated, from where it accepts a bond,
                     #   or from waters that have already accepted two
                     if other != node and other not in donating \
@@ -197,10 +198,11 @@ class SimpleEnvironment(PyEnvironment):
                         output.append((node, other))
 
         # A new water can donate bonds to all waters that are not yet accepting two bonds
-        new = len(self._state)
-        for other in range(new):
-            if other not in full_acceptors:
-                output.append((new, other))
+        if len(self._state) <= self.maximum_size:
+            new = len(self._state)
+            for other in range(new):
+                if other not in full_acceptors:
+                    output.append((new, other))
 
         return output
 

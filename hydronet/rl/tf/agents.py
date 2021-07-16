@@ -11,7 +11,7 @@ class RandomPolicy(PyPolicy):
     def _action(self, time_step: ts.TimeStep, policy_state: types.NestedArray,
                 seed: Optional[types.Seed] = None) -> policy_step.PolicyStep:
         # Get the adj matrix of possible actions
-        allowed_actions_adj = time_step.observation['allowed_actions'].numpy()
+        allowed_actions_adj = time_step.observation['allowed_actions']
 
         # Transform it to a list of tuples
         allowed_actions = np.transpose(np.nonzero(allowed_actions_adj))
@@ -19,4 +19,7 @@ class RandomPolicy(PyPolicy):
         # Pick one at random
         rng = np.random.RandomState(seed)
         rid = rng.choice(len(allowed_actions))
-        return policy_step.PolicyStep(allowed_actions[rid], policy_state)
+        return policy_step.PolicyStep(
+            np.array(allowed_actions[rid], np.int32),
+            policy_state
+        )

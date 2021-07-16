@@ -92,6 +92,8 @@ def test_stepping(env: SimpleEnvironment):
 
 
 def test_valid_moves(env: SimpleEnvironment):
+    env.maximum_size = 3
+
     # Starting from two bonded waters, the only action is to add a new water
     valid_moves = env.get_valid_moves()
     assert set(valid_moves) == {(0, 2), (1, 2), (2, 0), (2, 1)}
@@ -113,3 +115,9 @@ def test_valid_moves(env: SimpleEnvironment):
     assert valid_moves[0, :].sum() == 1  # First water can only donate to a new one
     assert valid_moves[:, 0].sum() == 1  # First water can only accept from a new one
     assert valid_moves[0, 3] == 1  # Checking a specific move
+
+    # When you add the last water and exceed the maximum size, you may add no more
+    obs = env.step((3, 0))
+    assert obs.step_type == ts.StepType.LAST
+    valid_moves = env.get_valid_moves()
+    assert not any(4 in x for x in valid_moves)  # Make sure we cannot add another water
