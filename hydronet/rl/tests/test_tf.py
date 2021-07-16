@@ -88,3 +88,27 @@ def test_stepping(env: SimpleEnvironment):
     step = env.step((1, 0))
     assert step.step_type == ts.StepType.MID
     assert step.reward == 1
+
+
+def test_valid_moves(env: SimpleEnvironment):
+    # Starting from two bonded waters, the only action is to add a new water
+    valid_moves = env.get_valid_moves()
+    assert set(valid_moves) == {(0, 2), (1, 2), (2, 0), (2, 1)}
+
+    # After adding that third water, you can connect it to the second water or add a fourth
+    #  We take a step such that the second water is accepting 2 bonds, so it can no-longer donate
+    env.step((2, 1))
+    valid_moves = env.get_valid_moves()
+    assert set(valid_moves) == {(0, 2), (0, 3), (1, 3), (2, 0), (2, 3), (3, 0), (3, 2)}
+
+    # After completing the triangle, the third water has now donated twice. It may donate no further
+    env.step((2, 0))
+    valid_moves = env.get_valid_moves()
+    assert set(valid_moves) == {(0, 3), (1, 3), (3, 0), (3, 2)}
+
+    # Test that last one in matrix form
+    valid_moves = env.get_valid_actions_as_matrix()
+    assert valid_moves.sum() == 4  # There are only 4 possible moves
+    assert valid_moves[0, :].sum() == 1  # First water can only donate to a new one
+    assert valid_moves[:, 0].sum() == 1  # First water can only accept from a new one
+    assert valid_moves[0, 3] == 1  # Checking a specific move

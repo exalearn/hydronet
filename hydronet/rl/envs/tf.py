@@ -1,7 +1,9 @@
-from typing import Dict, Any
+"""Environments for TF-agents"""
+from typing import Dict, Any, List, Tuple
 import logging
 
 import numpy as np
+from networkx.classes.reportviews import NodeView
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.trajectories import time_step as ts
 from tf_agents.specs import BoundedArraySpec
@@ -140,3 +142,65 @@ class SimpleEnvironment(PyEnvironment):
                 reward=reward,
                 discount=self.discount_factor
             )
+
+    def get_valid_moves(self) -> List[Tuple[int, int]]:
+        """Get all possible valid moves
+
+        Returns:
+            List of possible actions
+        """
+
+        output = []  # Stores the output arrays
+        # Get the nodes that have already accepted two bonds
+        acc_counts = [0] * len(self._state)
+        for u, v, data in self._state.edges(data=True):
+            if data['label'] == 'accept':
+                acc_counts[u] += 1
+        full_acceptors = [i for i, c in enumerate(acc_counts) if c >= 2]
+
+        # Loop over each atom in the graph
+        for node in self._state.nodes:
+            # Get the points to which this water is already bonded
+            edges = self._state[node]
+
+            # Get the waters to which this water donates or accepts bonds
+            donating = []
+            accepting = []
+            for other in edges:
+                if self._state.get_edge_data(node, other)['label'] == 'donate':
+                    donating.append(other)
+                else:
+                    accepting.append(other)
+
+            # Populate the lists of possible donations
+            if len(donating) < 2:  # Cannot donate more than twice
+                for other in range(len(self._state) + 1):
+                    #  Cannot donate to self, somewhere it has already donated, from where it accepts a bond,
+                    #   or from waters that have already accepted two
+                    if other != node and other not in donating \
+                            and other not in accepting and other not in full_acceptors:
+                        output.append((node, other))
+
+        # A new water can donate bonds to all waters that are not yet accepting two bonds
+        new = len(self._state)
+        for other in range(new):
+            if other not in full_acceptors:
+                output.append((new, other))
+
+        return output
+
+    def get_valid_actions_as_matrix(self) -> np.ndarray:
+        """Get the valid actions as a adjacency matrix
+
+        Returns:
+            Matrix where value is 0 if move is not possible and 1 if it is
+        """
+
+        # Initialize the output
+        size = self.maximum_size + 1
+        output = np.zeros((size, size), dtype='int32')
+
+        # Store the valid moves
+        for d, a in self.get_valid_moves():
+            output[d, a] = 1
+        return output
