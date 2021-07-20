@@ -57,6 +57,7 @@ class SimpleEnvironment(PyEnvironment):
 
         # Define the initial state
         self._state = init_cluster.copy()
+        self._episode_ended = False
 
     def observation_spec(self) -> types.NestedArraySpec:
         # TF-Agents require fixed size arrays. We know the number of bonds cannot be more than 4 times
@@ -69,7 +70,7 @@ class SimpleEnvironment(PyEnvironment):
             'atom': BoundedArraySpec((n,), minimum=0, maximum=1, dtype='int32'),
             'bond': BoundedArraySpec((n * 4,), minimum=0, maximum=1, dtype='int32'),
             'connectivity': BoundedArraySpec((n * 4, 2), minimum=0, maximum=self.maximum_size, dtype='int32'),
-            'allowed_actions': BoundedArraySpec((n + 1, n + 1), minimum=0, maximum=1, dtype='int32')
+            'allowed_actions': BoundedArraySpec((n, n), minimum=0, maximum=1, dtype='int32')
         }
 
     def action_spec(self) -> types.NestedArraySpec:
@@ -102,16 +103,22 @@ class SimpleEnvironment(PyEnvironment):
 
     def _reset(self) -> ts.TimeStep:
         self._state = self.init_cluster.copy()
+        self._episode_ended = False
         return ts.restart(
             self.get_state_as_tensors()
         )
 
     def _step(self, action: types.NestedArray) -> ts.TimeStep:
+        # If it is a new episode is starting
+        if self._episode_ended:
+            return self.reset()
+
         # Add a new node if needed
         donor, acceptor = action
 
         # Check that at least one of the atoms is not in the graph
         if sum(i in self._state.nodes for i in action) == 0:
+            self._episode_ended = True
             logger.warning('At least one atom must be in the graph')
             return ts.termination(
                 self.get_state_as_tensors(),
@@ -135,6 +142,7 @@ class SimpleEnvironment(PyEnvironment):
 
         # Check if the graph is valid
         if not graph_is_valid(self._state, coarse=True):
+            self._episode_ended = True
             logger.warning('Action created an invalid graph.')
             return ts.termination(
                 self.get_state_as_tensors(),
@@ -147,6 +155,7 @@ class SimpleEnvironment(PyEnvironment):
 
         # Compute the fingerprints for the state
         if done:
+            self._episode_ended = True
             return ts.termination(
                 self.get_state_as_tensors(),
                 reward=reward

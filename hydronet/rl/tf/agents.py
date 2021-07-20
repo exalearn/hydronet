@@ -16,6 +16,13 @@ class RandomPolicy(PyPolicy):
         # Transform it to a list of tuples
         allowed_actions = np.transpose(np.nonzero(allowed_actions_adj))
 
+        # Special case: No actions - Return a redo of the first bond (will not change graph
+        if len(allowed_actions) == 0:
+            return policy_step.PolicyStep(
+                np.array([0, 1], np.int32),
+                policy_state
+            )
+
         # Pick one at random
         rng = np.random.RandomState(seed)
         rid = rng.choice(len(allowed_actions))
