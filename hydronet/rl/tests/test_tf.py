@@ -1,5 +1,7 @@
 """Test the OpenAI Gym environment"""
+from tf_agents.environments import utils
 from tf_agents.trajectories import time_step as ts
+from tf_agents.specs import array_spec
 import tensorflow as tf
 from pytest import fixture
 import numpy as np
@@ -33,10 +35,16 @@ def test_specs(env: SimpleEnvironment):
     assert env.action_spec().shape == (2,)
 
 
+def test_state_matches_specs(env: SimpleEnvironment):
+    init_ts = env.reset()
+    tf.nest.assert_same_structure(init_ts.observation, env.observation_spec())
+    assert array_spec.check_arrays_nest(init_ts.observation, env.observation_spec())
+
+
 def test_states(env: SimpleEnvironment):
     init_ts = env.get_state_as_tensors()
     for k, v in init_ts.items():
-        assert isinstance(v, tf.Tensor), f'{k} is not a Tensor'
+        assert isinstance(v, np.ndarray), f'{k} is not an np.ndarray'
 
 
 def test_stepping(env: SimpleEnvironment):
@@ -121,3 +129,7 @@ def test_valid_moves(env: SimpleEnvironment):
     assert obs.step_type == ts.StepType.LAST
     valid_moves = env.get_valid_moves()
     assert not any(4 in x for x in valid_moves)  # Make sure we cannot add another water
+
+
+def test_with_tf_agents(env: SimpleEnvironment):
+    utils.validate_py_environment(env, 5)

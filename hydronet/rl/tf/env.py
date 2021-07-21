@@ -5,7 +5,7 @@ import logging
 import numpy as np
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.trajectories import time_step as ts
-from tf_agents.specs import BoundedArraySpec, BoundedTensorSpec
+from tf_agents.specs import BoundedArraySpec
 from tf_agents.typing import types
 import tensorflow as tf
 import networkx as nx
@@ -35,6 +35,8 @@ class SimpleEnvironment(PyEnvironment):
             and 0 otherwise
 
     """
+
+    # TODO (wardlt): Harmonize the terms. Make them consistent as graph terms (e.g., source_id, destination_id)
 
     def __init__(self, reward: RewardFunction = None, maximum_size: int = 10,
                  init_cluster: nx.DiGraph = None, record_path: bool = False,
@@ -66,24 +68,24 @@ class SimpleEnvironment(PyEnvironment):
         #  and a "collector" to donate and receive bonds placeholder bonds
         n = self.maximum_size + 2
         return {
-            'n_atoms': BoundedArraySpec((), minimum=0, dtype='int32'),
+            'n_atoms': BoundedArraySpec((), minimum=0, dtype='int32', name='n_atoms'),
             'atom': BoundedArraySpec((n,), minimum=0, maximum=1, dtype='int32'),
             'bond': BoundedArraySpec((n * 4,), minimum=0, maximum=1, dtype='int32'),
-            'connectivity': BoundedArraySpec((n * 4, 2), minimum=0, maximum=self.maximum_size, dtype='int32'),
+            'connectivity': BoundedArraySpec((n * 4, 2), minimum=0, maximum=n, dtype='int32'),
             'allowed_actions': BoundedArraySpec((n, n), minimum=0, maximum=1, dtype='int32')
         }
 
     def action_spec(self) -> types.NestedArraySpec:
         return BoundedArraySpec((2,), dtype='int32', minimum=0, maximum=self.maximum_size)
 
-    def get_state_as_tensors(self) -> Dict[str, tf.Tensor]:
+    def get_state_as_tensors(self) -> Dict[str, np.ndarray]:
         # Get the data as arrays
         simple_graph = create_inputs_from_nx(self._state)
 
         # Build the buffered arrays
         n = self.maximum_size + 2
         output = {
-            'n_atoms': simple_graph['n_atoms'],
+            'n_atoms': np.array(simple_graph['n_atoms'], np.int32),
             'atom': np.zeros((n,), dtype=np.int32),
             'bond': np.zeros((n * 4,), dtype=np.int32),
             'connectivity': np.zeros((n * 4, 2), dtype=np.int32) + self.maximum_size + 1,
@@ -93,7 +95,7 @@ class SimpleEnvironment(PyEnvironment):
             output[i][:len(simple_graph[i])] = simple_graph[i]
         output['connectivity'][:len(simple_graph['connectivity']), :] = np.array(simple_graph['connectivity'])
 
-        return dict((k, tf.convert_to_tensor(v)) for k, v in output.items())
+        return dict((k, np.array(v)) for k, v in output.items())
 
     def get_state(self) -> Any:
         return self._state.copy()
