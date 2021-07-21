@@ -24,7 +24,7 @@ class MessageBlock(layers.Layer):
     def __init__(self, atom_dimension, activation: str = 'tanh', **kwargs):
         """
         Args:
-             atom_dimension (str): Number of features to use to describe each atom
+             atom_dimension (int): Number of features to use to describe each atom
              activation (str): Activation function for the message layers
         """
         super(MessageBlock, self).__init__(**kwargs)

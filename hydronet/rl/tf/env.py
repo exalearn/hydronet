@@ -69,6 +69,7 @@ class SimpleEnvironment(PyEnvironment):
         n = self.maximum_size + 2
         return {
             'n_atoms': BoundedArraySpec((), minimum=0, dtype='int32', name='n_atoms'),
+            'n_bonds': BoundedArraySpec((), minimum=0, dtype='int32', name='n_bonds'),
             'atom': BoundedArraySpec((n,), minimum=0, maximum=1, dtype='int32'),
             'bond': BoundedArraySpec((n * 4,), minimum=0, maximum=1, dtype='int32'),
             'connectivity': BoundedArraySpec((n * 4, 2), minimum=0, maximum=n, dtype='int32'),
@@ -86,6 +87,7 @@ class SimpleEnvironment(PyEnvironment):
         n = self.maximum_size + 2
         output = {
             'n_atoms': np.array(simple_graph['n_atoms'], np.int32),
+            'n_bonds': np.array(simple_graph['n_bonds'], np.int32),
             'atom': np.zeros((n,), dtype=np.int32),
             'bond': np.zeros((n * 4,), dtype=np.int32),
             'connectivity': np.zeros((n * 4, 2), dtype=np.int32) + self.maximum_size + 1,
