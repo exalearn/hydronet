@@ -12,9 +12,7 @@ from tf_agents.networks import network
 
 
 class GCPN(network.Network):
-    """Graph convolutional policy network.
-
-    Implemented using a simple message-passing framework for now"""
+    """Graph convolutional policy network that """
 
     def __init__(self, observation_spec, action_spec, example_timestep: TimeStep,
                  num_messages: int = 1, node_features: int = 32):
@@ -97,22 +95,8 @@ class GCPN(network.Network):
         """Perform a few graph message passing steps"""
         allowed_actions = observations['allowed_actions']
 
-        # Get the number of nodes per graph
-        batch_size, nodes_per_graph = tf.shape(observations['atom'])
-
-        # Prepare the data in a form ready for the data
-        batch = self.convert_env_to_mpnn_batch(observations)
-
-        # Make initial features for the atoms and bonds
-        bond_features = self.bond_embedding(batch['bond'])
-        atom_features = tf.ones((tf.shape(batch['atom'])[0], self.node_features), dtype=tf.float32)
-
-        # Perform the message steps
-        for message_layer in self.message_layers:
-            atom_features, bond_features = message_layer([atom_features, bond_features, batch['connectivity']])
-
-        # Reshape the atom features so they are arranged (cluster, atom, feature)
-        atom_features = tf.reshape(atom_features, (batch_size, nodes_per_graph, self.node_features))
+        # Make features for each atom using message-passing
+        atom_features = self.perform_message_passing(observations)
 
         # Determine the source node: Use the atom_features
         can_be_donor = tf.reduce_any(allowed_actions > 0, axis=1)  # If *any* bonds are possible with this as a donation
@@ -123,6 +107,7 @@ class GCPN(network.Network):
         donor_choice = Categorical(probs=donor_prob).sample()
 
         # Determine the destination nodes: Use features of donor atom and the possible acceptors
+        _, nodes_per_graph = tf.shape(observations['atom'])
         donor_features = tf.gather(atom_features, donor_choice, axis=1, batch_dims=1)  # Get features for donor
         valid_acceptors = tf.gather(allowed_actions, donor_choice, axis=1, batch_dims=1)  # Get possible acceptors
         acceptor_features = tf.concat([
@@ -135,3 +120,32 @@ class GCPN(network.Network):
         acceptor_choice = Categorical(probs=acceptor_prob).sample()
 
         return tf.stack([donor_choice, acceptor_choice], axis=1, name='output_stack'), network_state
+
+    def perform_message_passing(self, observations):
+        """Produce features for each node using message passing
+
+        Parameters
+        ----------
+        observations: Observations for each batch
+
+        Returns
+        -------
+        atom_features:
+            (batch_size, nodes_per_graph, num_features) array of features for each node
+        """
+        # Get the number of nodes per graph
+        batch_size, nodes_per_graph = tf.shape(observations['atom'])
+
+        # Prepare the data in a form ready for the neural network
+        batch = self.convert_env_to_mpnn_batch(observations)
+
+        # Make initial features for the atoms and bonds
+        bond_features = self.bond_embedding(batch['bond'])
+        atom_features = tf.ones((tf.shape(batch['atom'])[0], self.node_features), dtype=tf.float32)
+
+        # Perform the message steps
+        for message_layer in self.message_layers:
+            atom_features, bond_features = message_layer([atom_features, bond_features, batch['connectivity']])
+        # Reshape the atom features so they are arranged (cluster, atom, feature)
+        atom_features = tf.reshape(atom_features, (batch_size, nodes_per_graph, self.node_features))
+        return atom_features

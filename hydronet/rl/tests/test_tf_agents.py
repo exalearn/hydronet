@@ -9,7 +9,6 @@ import tensorflow as tf
 from pytest import fixture
 from tf_agents.typing.types import NestedTensor
 
-from hydronet.mpnn.data import combine_graphs
 from hydronet.rl.tf.networks import GCPN
 from hydronet.rl.tf.agents import ConstrainedRandomPolicy
 from hydronet.rl.tf.env import SimpleEnvironment
@@ -107,7 +106,7 @@ def test_gcpn_network(tf_env, example_batch):
     assert action_choice.shape == (2, 2)
 
 
-def test_gcpn_policy(tf_env, example_batch):
+def test_gcpn_policy(tf_env):
     network = GCPN(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
     actor = ActorPolicy(
         tf_env.time_step_spec(),
