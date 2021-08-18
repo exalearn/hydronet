@@ -24,3 +24,5 @@ def test_multicategorical():
     samples = samples.numpy()
     assert samples[:, 0, 0].max() == 0
     assert samples[:, 0, 1].max() == 1
+
+    assert (dist.mode().numpy() == [[0, 1], [1, 1]]).all()

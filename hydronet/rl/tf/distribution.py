@@ -1,5 +1,5 @@
-from tensorflow_probability.python.distributions import Distribution
-from tensorflow_probability.python.internal import reparameterization, samplers
+from tensorflow_probability.python.distributions import Distribution, Normal
+from tensorflow_probability.python.internal import reparameterization, samplers, parameter_properties
 import tensorflow as tf
 import six
 
@@ -43,11 +43,26 @@ class MultiCategorical(Distribution):
     def _event_shape(self):
         return tf.TensorShape([self._dim])
 
+    @classmethod
     def _parameter_properties(cls, dtype, num_classes=None):
-        pass
+        return dict(
+            logits=parameter_properties.ParameterProperties(
+                event_ndims=2
+            )
+        )
+
+    @property
+    def logits(self):
+        return self._logits
+
+    def _log_prob(self, value):
+        return tf.gather_nd(self._logits, value, batch_dims=1)
 
     def _batch_shape(self):
         return self._batch_size
+
+    def _batch_shape_tensor(self):
+        return tf.TensorSpec((self._batch_size,))
 
     def _mode(self, **kwargs):
         # Get the most-probable sample for each

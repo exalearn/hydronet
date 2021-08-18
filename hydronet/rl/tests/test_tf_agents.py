@@ -76,7 +76,7 @@ def test_random(env, tf_env):
     assert allowed_adj[action[0], action[1]] == 1
 
 
-def test_with_driver(tf_env):
+def test_random_with_driver(tf_env):
     tf_policy = ConstrainedRandomPolicy(
         time_step_spec=tf_env.time_step_spec(),
         action_spec=tf_env.action_spec()
@@ -103,7 +103,7 @@ def test_gcpn_network(tf_env, example_batch):
     assert batch['node_graph_indices'].numpy().max() == 1
 
     action_choice, _ = network.call(example_batch['observation'])
-    assert action_choice.shape == (2, 2)
+    assert action_choice.sample().shape == (2, 2)
 
 
 def test_gcpn_policy(tf_env):
@@ -115,4 +115,4 @@ def test_gcpn_policy(tf_env):
     )
     init_ts = tf_env.reset()
     action = actor.action(init_ts)
-    assert action.action.shape == (1, 2)
+    print(action)

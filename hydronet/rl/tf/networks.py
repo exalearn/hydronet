@@ -1,14 +1,15 @@
 import tensorflow as tf
 from keras.layers import Embedding, Softmax, Dense
-from tensorflow_probability.python.distributions import Categorical
 from tf_agents.trajectories import time_step
-from tf_agents.typing.types import NestedTensor, TimeStep
+from tf_agents.typing.types import NestedTensor, TimeStep, TensorSpec
 from tf_agents.specs import tensor_spec
 
 from hydronet.mpnn.data import combine_graphs
 from hydronet.mpnn.layers import MessageBlock
 
 from tf_agents.networks import network
+
+from hydronet.rl.tf.distribution import MultiCategorical
 
 
 class GCPN(network.Network):
@@ -45,11 +46,9 @@ class GCPN(network.Network):
         self.bond_embedding = Embedding(2, node_features)
         self.message_layers = [MessageBlock(atom_dimension=node_features, name=f'message_{i}')
                                for i in range(num_messages)]
-        self.softmax = Softmax(axis=1)
-        self.donor_dense = [Dense(node_features // 2, name=f'donor_{i}') for i in range(2)]
-        self.donor_dense.append(Dense(1, name='donor_last'))
-        self.acceptor_dense = [Dense(node_features // 2, name=f'acceptor_{i}') for i in range(2)]
-        self.acceptor_dense.append(Dense(1, name='acceptor_last'))
+        self.softmax = Softmax(axis=[1, 2])  # Axis 0 is the batch axis
+        self.output_dense = [Dense(node_features, name=f'pair_{i}') for i in range(2)]
+        self.output_dense.append(Dense(1, name='pair_1'))
 
     def create_variables(self, input_tensor_spec=None, **kwargs):
         # TF-Agents generates a random input to run through the network,
@@ -63,9 +62,7 @@ class GCPN(network.Network):
             network_state=initial_state,
             **kwargs)
 
-        self._network_output_spec = tensor_spec.remove_outer_dims_nest(
-            tf.type_spec_from_value(outputs[0]), num_outer_dims=1)
-        return self._network_output_spec
+        return TensorSpec(outputs[0])
 
     def convert_env_to_mpnn_batch(self, batch: [str, tf.Tensor]) -> NestedTensor:
         """Convert a batch from the environment into the form needed for our message-passing network
@@ -98,28 +95,23 @@ class GCPN(network.Network):
         # Make features for each atom using message-passing
         atom_features = self.perform_message_passing(observations)
 
-        # Determine the source node: Use the atom_features
-        can_be_donor = tf.reduce_any(allowed_actions > 0, axis=1)  # If *any* bonds are possible with this as a donation
-        donor_features = atom_features
-        for dense in self.donor_dense:
-            donor_features = dense(donor_features)
-        donor_prob = self.softmax(donor_features[:, :, 0], can_be_donor)  # Assign a prob=0 for invalid donors
-        donor_choice = Categorical(probs=donor_prob).sample()
-
-        # Determine the destination nodes: Use features of donor atom and the possible acceptors
+        # We will predict the probability for each source/destination pair
+        # Make a Cartesian product of all sensor actor/pairs
         _, nodes_per_graph = tf.shape(observations['atom'])
-        donor_features = tf.gather(atom_features, donor_choice, axis=1, batch_dims=1)  # Get features for donor
-        valid_acceptors = tf.gather(allowed_actions, donor_choice, axis=1, batch_dims=1)  # Get possible acceptors
-        acceptor_features = tf.concat([
-            tf.tile(donor_features[:, None, :], (1, nodes_per_graph, 1)),
-            atom_features
-        ], axis=2, name='accept_features')  # Acceptor features are those of the donor and each possible acceptor
-        for dense in self.acceptor_dense:
-            acceptor_features = dense(acceptor_features)
-        acceptor_prob = self.softmax(acceptor_features[:, :, 0], valid_acceptors)  # Assign a prob=0 invalid acceptors
-        acceptor_choice = Categorical(probs=acceptor_prob).sample()
+        pair_features = tf.concat([
+            tf.tile(tf.expand_dims(atom_features, 2), (1, 1, nodes_per_graph, 1)),
+            tf.tile(tf.expand_dims(atom_features, 1), (1, nodes_per_graph, 1, 1)),
+        ], axis=3)  # shape: (batch_size, nodes_per_graph, atom_features * 2)
 
-        return tf.stack([donor_choice, acceptor_choice], axis=1, name='output_stack'), network_state
+        # Pass them through dense layers to get a single value per pair
+        pair_values = pair_features
+        for layer in self.output_dense:
+            pair_values = layer(pair_values)
+
+        # Compute the probabilities using softmax. We will mask the pairs that are invalid
+        pair_probs = self.softmax(pair_features[:, :, :, 0], allowed_actions)
+
+        return MultiCategorical(pair_probs), network_state
 
     def perform_message_passing(self, observations):
         """Produce features for each node using message passing
