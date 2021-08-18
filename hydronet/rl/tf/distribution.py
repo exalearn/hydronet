@@ -18,15 +18,16 @@ class MultiCategorical(Distribution):
         self._dtype = self.input_shape.dtype
 
         # Flatten to seem like a single set of categories for each batch
-        self._logits = tf.reshape(tf.math.log(probs), [self.input_shape[0], -1])
+        self._logits = tf.math.log(probs)
+        self._logits_flat = tf.reshape(self._logits, [self.input_shape[0], -1])
 
     def _sample_n(self, n, seed=None, **kwargs):
         # Make the sampling
         # From TFP/categorical.py -> TODO(b/147874898): Remove workaround for seed-sensitive tests.
         if seed is None or isinstance(seed, six.integer_types):
-            idx_samples = tf.random.categorical(self._logits, n, seed=seed, dtype=self._dtype)
+            idx_samples = tf.random.categorical(self._logits_flat, n, seed=seed, dtype=self._dtype)
         else:
-            idx_samples = samplers.categorical(self._logits, n, seed=seed, dtype=self._dtype)
+            idx_samples = samplers.categorical(self._logits_flat, n, seed=seed, dtype=self._dtype)
 
         # Map the index in the array to the multi-categorical shape
         idx_samples = tf.reshape(idx_samples, [-1])  # (batch_size, n) -> (batch_size * n)
@@ -53,7 +54,7 @@ class MultiCategorical(Distribution):
 
     @property
     def logits(self):
-        return self._logits
+        return self._logits_flat
 
     def _log_prob(self, value):
         return tf.gather_nd(self._logits, value, batch_dims=1)
@@ -66,7 +67,7 @@ class MultiCategorical(Distribution):
 
     def _mode(self, **kwargs):
         # Get the most-probable sample for each
-        idx_max = tf.argmax(self._logits, axis=1, output_type=self.dtype)  # (batch_size,)
+        idx_max = tf.argmax(self._logits_flat, axis=1, output_type=self.dtype)  # (batch_size,)
 
         # Get the coordinates
         ind_mode = tf.unravel_index(
