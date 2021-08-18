@@ -114,5 +114,11 @@ def test_gcpn_policy(tf_env):
         network
     )
     init_ts = tf_env.reset()
+
+    # Test the deterministic output
     action = actor.action(init_ts)
-    print(action)
+    assert action.action.shape == (1, 2)
+
+    # Test the probabilistic output
+    dist = actor.distribution(init_ts)
+    assert dist.action.mode().shape == (1, 2)

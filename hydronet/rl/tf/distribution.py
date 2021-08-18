@@ -1,4 +1,4 @@
-from tensorflow_probability.python.distributions import Distribution, Normal
+from tensorflow_probability.python.distributions import Distribution, Categorical
 from tensorflow_probability.python.internal import reparameterization, samplers, parameter_properties
 import tensorflow as tf
 import six
@@ -12,13 +12,13 @@ class MultiCategorical(Distribution):
             dtype=tf.int32, reparameterization_type=reparameterization.NOT_REPARAMETERIZED,
             validate_args=False, allow_nan_stats=True
         )
-        self._shape = tf.shape(probs)
-        self._batch_size = self._shape[0]
-        self._dim = len(self._shape) - 1
-        self._dtype = self._shape.dtype
+        self.input_shape = tf.shape(probs)
+        self._batch_size = self.input_shape[0]
+        self._dim = len(self.input_shape) - 1
+        self._dtype = self.input_shape.dtype
 
         # Flatten to seem like a single set of categories for each batch
-        self._logits = tf.reshape(tf.math.log(probs), [self._shape[0], -1])
+        self._logits = tf.reshape(tf.math.log(probs), [self.input_shape[0], -1])
 
     def _sample_n(self, n, seed=None, **kwargs):
         # Make the sampling
@@ -32,7 +32,7 @@ class MultiCategorical(Distribution):
         idx_samples = tf.reshape(idx_samples, [-1])  # (batch_size, n) -> (batch_size * n)
         ind_samples = tf.unravel_index(
             idx_samples,
-            self._shape[1:]
+            self.input_shape[1:]
         )  # (n_dim, self.n_samples), Samples are ordered (n samples from batch_0, n samples from batch_1, ...)
         #  So, the last varying dimension is "n"
         ind_samples = tf.reshape(ind_samples, [self._dim, self._batch_size, n])
@@ -71,6 +71,6 @@ class MultiCategorical(Distribution):
         # Get the coordinates
         ind_mode = tf.unravel_index(
             idx_max,
-            self._shape[1:]
+            self.input_shape[1:]
         )  # (n_dim, batch_size)
         return tf.transpose(ind_mode)

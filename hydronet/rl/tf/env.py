@@ -7,7 +7,6 @@ from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.trajectories import time_step as ts
 from tf_agents.specs import BoundedArraySpec
 from tf_agents.typing import types
-import tensorflow as tf
 import networkx as nx
 
 from hydronet.data import graph_is_valid

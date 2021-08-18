@@ -1,8 +1,9 @@
 import tensorflow as tf
 from keras.layers import Embedding, Softmax, Dense
+from tf_agents.specs.distribution_spec import DistributionSpec
+from tf_agents.specs import BoundedTensorSpec
 from tf_agents.trajectories import time_step
-from tf_agents.typing.types import NestedTensor, TimeStep, TensorSpec
-from tf_agents.specs import tensor_spec
+from tf_agents.typing.types import NestedTensor, TimeStep
 
 from hydronet.mpnn.data import combine_graphs
 from hydronet.mpnn.layers import MessageBlock
@@ -12,7 +13,7 @@ from tf_agents.networks import network
 from hydronet.rl.tf.distribution import MultiCategorical
 
 
-class GCPN(network.Network):
+class GCPN(network.DistributionNetwork):
     """Graph convolutional policy network that """
 
     def __init__(self, observation_spec, action_spec, example_timestep: TimeStep,
@@ -26,15 +27,27 @@ class GCPN(network.Network):
             num_messages: Number of message-passing steps
             node_features: Number of features to use to represent a node
         """
+
+        # Store the specifications
+        self.example_timestep = example_timestep.observation
+        self.action_spec = action_spec
+
+        # Build the output specification for the network, which define the distribution and samples
+        max_nodes = example_timestep.observation['atom'].shape[0]
+        output_spec = DistributionSpec(
+            MultiCategorical,
+            input_params_spec={
+                'probs': BoundedTensorSpec((max_nodes, max_nodes), minimum=0, maximum=1, dtype='float32')
+            },
+            sample_spec=self.action_spec
+        )
+
         super().__init__(
             input_tensor_spec=observation_spec,
             state_spec=(),
+            output_spec=output_spec,
             name='GCPN'
         )
-
-        # Store the example_timestep
-        self.example_timestep = example_timestep.observation
-        self.action_spec = action_spec
 
         # Make sure the input spec has the required fields
         for f in ['n_atoms', 'atom', 'bond', 'connectivity', 'allowed_actions']:
@@ -62,7 +75,12 @@ class GCPN(network.Network):
             network_state=initial_state,
             **kwargs)
 
-        return TensorSpec(outputs[0])
+        prob_spec = BoundedTensorSpec(outputs[0].input_shape[1:], minimum=0, maximum=1, dtype='float32')
+        return DistributionSpec(
+            MultiCategorical,
+            input_params_spec=prob_spec,
+            sample_spec=self.action_spec
+        )
 
     def convert_env_to_mpnn_batch(self, batch: [str, tf.Tensor]) -> NestedTensor:
         """Convert a batch from the environment into the form needed for our message-passing network
