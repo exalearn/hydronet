@@ -7,19 +7,21 @@ import six
 class MultiCategorical(Distribution):
     """Categorical distribution where the choice from each category are related"""
 
-    def __init__(self, probs: tf.Tensor):
+    def __init__(self, probs):
         super().__init__(
             dtype=tf.int32, reparameterization_type=reparameterization.NOT_REPARAMETERIZED,
             validate_args=False, allow_nan_stats=True
         )
         self.input_shape = tf.shape(probs)
         self._batch_size = self.input_shape[0]
-        self._dim = len(self.input_shape) - 1
+        self._dim = self.input_shape.shape[0] - 1
         self._dtype = self.input_shape.dtype
 
         # Flatten to seem like a single set of categories for each batch
         self._logits = tf.math.log(probs)
+        self._probs = probs
         self._logits_flat = tf.reshape(self._logits, [self.input_shape[0], -1])
+        self._probs_flat = tf.reshape(probs, [self.input_shape[0], -1])
 
     def _sample_n(self, n, seed=None, **kwargs):
         # Make the sampling
@@ -56,8 +58,8 @@ class MultiCategorical(Distribution):
     def logits(self):
         return self._logits_flat
 
-    def _log_prob(self, value):
-        return tf.gather_nd(self._logits, value, batch_dims=1)
+    def _prob(self, value):
+        return tf.gather_nd(self._probs, value, batch_dims=1)
 
     def _batch_shape(self):
         return self._batch_size
@@ -67,7 +69,7 @@ class MultiCategorical(Distribution):
 
     def _mode(self, **kwargs):
         # Get the most-probable sample for each
-        idx_max = tf.argmax(self._logits_flat, axis=1, output_type=self.dtype)  # (batch_size,)
+        idx_max = tf.argmax(self._probs_flat, axis=1, output_type=self.dtype)  # (batch_size,)
 
         # Get the coordinates
         ind_mode = tf.unravel_index(

@@ -9,7 +9,7 @@ import tensorflow as tf
 from pytest import fixture
 from tf_agents.typing.types import NestedTensor
 
-from hydronet.rl.tf.networks import GCPN
+from hydronet.rl.tf.networks import GCPNActorNetwork
 from hydronet.rl.tf.agents import ConstrainedRandomPolicy
 from hydronet.rl.tf.env import SimpleEnvironment
 
@@ -97,17 +97,25 @@ def test_random_with_driver(tf_env):
 
 
 def test_gcpn_network(tf_env, example_batch):
-    network = GCPN(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
+    network = GCPNActorNetwork(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
     batch = network.convert_env_to_mpnn_batch(example_batch['observation'])
+    network.create_variables()
     assert 'node_graph_indices' in batch
     assert batch['node_graph_indices'].numpy().max() == 1
 
     action_choice, _ = network.call(example_batch['observation'])
     assert action_choice.sample().shape == (2, 2)
 
+    # See if the network is differentiable
+    with tf.GradientTape() as tape:
+        dist, _ = network.call(example_batch['observation'])
+        max_prob = tf.reduce_max(dist.log_prob(dist.mode()))
+    grads = tape.gradient(max_prob, network.trainable_variables)
+    assert all(not tf.reduce_all(tf.math.is_nan(g)).numpy() for g in grads)
+
 
 def test_gcpn_policy(tf_env):
-    network = GCPN(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
+    network = GCPNActorNetwork(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
     actor = ActorPolicy(
         tf_env.time_step_spec(),
         tf_env.action_spec(),
@@ -122,3 +130,10 @@ def test_gcpn_policy(tf_env):
     # Test the probabilistic output
     dist = actor.distribution(init_ts)
     assert dist.action.mode().shape == (1, 2)
+
+    # Make sure it is differentiable
+    with tf.GradientTape() as tape:
+        dist = actor.distribution(init_ts)
+        max_prob = tf.reduce_max(dist.action.log_prob(dist.action.mode()))
+    grads = tape.gradient(max_prob, network.trainable_variables)
+    assert all(not tf.reduce_all(tf.math.is_nan(g)).numpy() for g in grads)
