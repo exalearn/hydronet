@@ -113,15 +113,15 @@ class GCPNActorNetwork(network.DistributionNetwork):
     def call(self, observations, step_type=(), network_state=()):
         """Perform a few graph message passing steps"""
 
-        # Flatten data so that
-        inner_shape = observations['allowed_actions'].shape[:-3]
+        # Flatten data so that there is a single batch dimension
+        outer_shape = observations['allowed_actions'].shape[:-3]
         batch_size = observations['allowed_actions'].shape[-3]
-        new_batch_size = tf.reduce_prod(inner_shape) * batch_size
+        new_batch_size = tf.reduce_prod(outer_shape) * batch_size
 
         def _flatten(x):
             old_shape = tf.shape(x)
             new_shape = tf.concat(
-                ([new_batch_size], old_shape[inner_shape.ndims + 1:]), axis=0
+                ([new_batch_size], old_shape[outer_shape.ndims + 1:]), axis=0
             )
             return tf.reshape(x, new_shape)
         observations = tf.nest.map_structure(_flatten, observations)
@@ -148,9 +148,9 @@ class GCPNActorNetwork(network.DistributionNetwork):
 
         # Shape the outputs like the original input shape
         bond_counts = tf.shape(pair_probs)[-1]
-        output_shape = tf.concat((inner_shape, (batch_size, bond_counts, bond_counts)), axis=0)
+        output_shape = tf.concat((outer_shape, (batch_size, bond_counts, bond_counts)), axis=0)
         pair_probs = tf.reshape(pair_probs, output_shape)
-        return MultiCategorical(pair_probs), ()
+        return MultiCategorical(pair_probs, 2), ()
 
     def perform_message_passing(self, observations):
         """Produce features for each node using message passing

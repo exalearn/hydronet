@@ -137,3 +137,13 @@ def test_gcpn_policy(tf_env):
         max_prob = tf.reduce_max(dist.action.log_prob(dist.action.mode()))
     grads = tape.gradient(max_prob, network.trainable_variables)
     assert all(not tf.reduce_all(tf.math.is_nan(g)).numpy() for g in grads)
+
+
+def test_reinforce_agent(tf_env):
+    network = GCPNActorNetwork(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
+    actor = ActorPolicy(
+        tf_env.time_step_spec(),
+        tf_env.action_spec(),
+        network
+    )
+    init_ts = tf_env.reset()

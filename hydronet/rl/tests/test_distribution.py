@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow_probability.python.distributions import Categorical
 
 from hydronet.rl.tf.distribution import MultiCategorical
 
@@ -8,7 +7,7 @@ def test_multicategorical():
     # Test with a single batch to make sure actions work
     dist = MultiCategorical(tf.Variable([
         [[0.2, 0.1], [0.3, 0.4]]
-    ]))
+    ]), 2)
     assert dist.sample(8).shape == (8, 1, 2)
     assert dist.mode().shape == (1, 2)
     assert (dist.mode() == [1, 1]).numpy().all()
@@ -17,8 +16,8 @@ def test_multicategorical():
     # Use two batches to make sure samples are the same
     dist = MultiCategorical(tf.constant([
         [[0.1, 0.9], [0, 0]],  # Only [0, 0] and [0, 1]
-        [[0, 0], [0.1, 0.9]]   # Only [1, 0] and [1, 1]
-    ]))
+        [[0, 0], [0.1, 0.9]]  # Only [1, 0] and [1, 1]
+    ]), 2)
     samples = dist.sample(3)
     assert samples.shape == (3, 2, 2)
 
@@ -33,12 +32,22 @@ def test_multicategorical():
     # Make sure it has derivatives
     input_probs = tf.Variable([
         [[0.1, 0.9], [0, 0]],  # Only [0, 0] and [0, 1]
-        [[0, 0], [0.1, 0.9]]   # Only [1, 0] and [1, 1]
+        [[0, 0], [0.1, 0.9]]  # Only [1, 0] and [1, 1]
     ])
     with tf.GradientTape() as tape:
-        dist = MultiCategorical(input_probs)
+        dist = MultiCategorical(input_probs, 2)
         probs = dist.log_prob(dist.mode())
         psum = tf.reduce_sum(probs)
     grads = tape.gradient(psum, input_probs)
     assert all(not tf.reduce_all(tf.math.is_nan(g)).numpy() for g in grads)
-    print('grad:', grads)
+
+    # Try with a complex batch shape
+    input_probs = tf.Variable([[
+        [[[0.1, 0.9], [0, 0]], [[0, 0], [0.1, 0.9]]],
+        [[[0, 0], [0.9, 0.1]], [[0, 0], [0.1, 0.9]]],
+    ]])
+    dist = MultiCategorical(input_probs, 2)
+    assert tf.equal(dist.mode(), [[
+        [[0, 1], [1, 1]],
+        [[1, 0], [1, 1]]
+    ]]).numpy().all()
