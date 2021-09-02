@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class SimpleEnvironment(PyEnvironment):
-    """Environment for gradually growing a water cluster. Terminates only when a maximum size has been met
+    """Environment for gradually growing a water cluster. Terminates only when a maximum size has been exceeded
 
     The state is the state of the graph:
 
@@ -32,14 +32,30 @@ class SimpleEnvironment(PyEnvironment):
             an array of the correct size.
         - ``allowed_actions``: A matrix where [donor, acceptor] equals 1 if a move is allowed
             and 0 otherwise
-
     """
 
     # TODO (wardlt): Harmonize the terms. Make them consistent as graph terms (e.g., source_id, destination_id)
 
     def __init__(self, reward: RewardFunction = None, maximum_size: int = 10,
-                 init_cluster: nx.DiGraph = None, record_path: bool = False,
-                 discount_factor: float = 1.0):
+                 init_cluster: nx.DiGraph = None, discount_factor: float = 1.0,
+                 only_last: bool = True):
+        """
+
+        Parameters
+        ----------
+        reward
+            Reward function used to score graphs. (Default: Bond count)
+        maximum_size
+            Maximum allowed size of the graph
+        init_cluster
+            Initial graph to start with
+        discount_factor
+            Discount factor for the rewards
+        only_last
+            Whether to only score a reward for the last step. The reward here is the score of the graph before
+            the episode terminated (i.e., the last step at the maximum size because the episode terminates
+            when we exceed the target size)
+        """
         super().__init__()
         # Capture the user settings
         if init_cluster is None:
@@ -52,9 +68,9 @@ class SimpleEnvironment(PyEnvironment):
             reward = BondCountReward()
         self.reward_fn = reward
         self.init_cluster = init_cluster
-        self.record_path = record_path
         self.maximum_size = maximum_size
         self.discount_factor = discount_factor
+        self.only_last = only_last
 
         # Define the initial state
         self._state = init_cluster.copy()
@@ -120,6 +136,7 @@ class SimpleEnvironment(PyEnvironment):
         donor, acceptor = action
 
         # Check that at least one of the atoms is not in the graph
+        _last_state = self._state.copy()
         if sum(i in self._state.nodes for i in action) == 0:
             self._episode_ended = True
             logger.warning('At least one atom must be in the graph')
@@ -153,7 +170,7 @@ class SimpleEnvironment(PyEnvironment):
             )
 
         # Compute the reward and if we are done
-        reward = self.reward_fn(self._state)
+        reward = self.reward_fn(self._state) if not self.only_last else 0
         done = len(self._state) > self.maximum_size or len(self.get_valid_moves()) == 0
 
         # Compute the fingerprints for the state
@@ -161,7 +178,7 @@ class SimpleEnvironment(PyEnvironment):
             self._episode_ended = True
             return ts.termination(
                 self.get_state_as_tensors(),
-                reward=reward
+                reward=self.reward_fn(_last_state)
             )
         else:
             return ts.transition(
