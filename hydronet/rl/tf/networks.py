@@ -146,6 +146,19 @@ class GCPNActorNetwork(network.DistributionNetwork):
         # Compute the probabilities using softmax. We will mask the pairs that are invalid
         pair_probs = self.softmax(pair_values[:, :, :, 0], allowed_actions)
 
+        # Special case: If no actions are allowed, then allow all actions with equal probabilities
+        #  Addresses a weird problem: If there are no valid actions then a policy agent will
+        #  pick a randomly-selected one, which causes problems when you train the model.
+        #  That randomly-selected action will have a probability of 0 and a log-probability of -inf.
+        #  Many training algorithms use the log-probability in the loss functions and doing math
+        #  with infinities results will result in numerical problems when computing loss.
+        no_allowed_actions = tf.reduce_all(allowed_actions == 0, axis=[1, 2], keepdims=True)
+        pair_probs = tf.where(
+            tf.tile(no_allowed_actions, (1, nodes_per_graph, nodes_per_graph)),
+            1. / tf.cast(nodes_per_graph * nodes_per_graph, tf.float32),
+            pair_probs
+        )
+
         # Shape the outputs like the original input shape
         bond_counts = tf.shape(pair_probs)[-1]
         output_shape = tf.concat((outer_shape, (batch_size, bond_counts, bond_counts)), axis=0)
@@ -177,6 +190,7 @@ class GCPNActorNetwork(network.DistributionNetwork):
         # Perform the message steps
         for message_layer in self.message_layers:
             atom_features, bond_features = message_layer([atom_features, bond_features, batch['connectivity']])
+
         # Reshape the atom features so they are arranged (cluster, atom, feature)
         atom_features = tf.reshape(atom_features, (batch_size, nodes_per_graph, self.node_features))
         return atom_features

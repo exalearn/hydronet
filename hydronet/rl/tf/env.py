@@ -171,14 +171,15 @@ class SimpleEnvironment(PyEnvironment):
 
         # Compute the reward and if we are done
         reward = self.reward_fn(self._state) if not self.only_last else 0
-        done = len(self._state) > self.maximum_size or len(self.get_valid_moves()) == 0
+        valid_moves = self.get_valid_moves()
+        done = len(self._state) > self.maximum_size or len(valid_moves) == 0
 
         # Compute the fingerprints for the state
         if done:
             self._episode_ended = True
             return ts.termination(
                 self.get_state_as_tensors(),
-                reward=self.reward_fn(_last_state)
+                reward=self.reward_fn(_last_state) if self.only_last else reward
             )
         else:
             return ts.transition(
