@@ -1,6 +1,6 @@
 """Utilities for using models to perform inference"""
 from tensorflow.keras.models import Model
-from graphsage.importing import create_inputs_from_nx
+from hydronet.importing import create_inputs_from_nx
 import networkx as nx
 import numpy as np
 
@@ -20,10 +20,10 @@ def run_inference(model: Model, graph: nx.Graph) -> float:
 
     # Compute the input
     batch = create_inputs_from_nx(graph)
-    batch['node_graph_indices'] = np.zeros(shape=(batch['n_atom'],))
-    batch['bond_graph_indices'] = np.zeros(shape=(batch['n_bond'],))
+    batch['node_graph_indices'] = np.zeros(shape=(batch['n_atoms'],))
+    batch['bond_graph_indices'] = np.zeros(shape=(batch['n_bonds'],))
     batch = dict((k, np.array(v)) for k, v in batch.items())
 
     # Run the batch
-    energies = model.predict_on_batch(batch)
-    return energies[0, 0]
+    energies = model(batch)
+    return energies[0, 0].numpy()

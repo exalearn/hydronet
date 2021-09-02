@@ -4,25 +4,25 @@ import networkx as nx
 import tensorflow as tf
 from tensorflow.keras.models import Model
 
-from hydronet.importing import create_inputs_from_nx
+from hydronet.mpnn.inference import run_inference
 from hydronet.rl.rewards import RewardFunction
 from hydronet.mpnn.layers import custom_objects
 
 
 class MPNNReward(RewardFunction):
+    """Reward function that estimates the energy of a water cluster using an MPNN"""
 
-    def __init__(self, model: Model, maximize: bool = True, big_value: float = 100.):
+    def __init__(self, model: Model, maximize: bool = False, big_value: float = 100., per_water: bool = True):
         """
         Args:
             model: Keras MPNN model (trained using the tools in this package)
-            atom_types: List of known atomic types
-            bond_types: List of known bond types
             maximize: Whether to maximize or minimize the target function
             big_value: Stand-in value to use for compounds the MPNN fails on
-            add_hs: Whether you need to add hydrogens to a graph before evaluating it
+            per_water: Whether to return the energy per water
         """
         super().__init__(maximize)
         self.model = model
+        self.per_water = per_water
         self.big_value = abs(big_value)
         if self.maximize:
             self.big_value *= -1
@@ -46,14 +46,5 @@ class MPNNReward(RewardFunction):
         self.__dict__.update(state)
 
     def _call(self, graph: nx.Graph) -> float:
-
-        # Convert the graph to dict format, and add in "node_graph_indices"
-        entry = create_inputs_from_nx(graph)
-        if entry['n_bond'] == 0:
-            return self.big_value
-        entry = dict((k, tf.convert_to_tensor(v)) for k, v in entry.items())
-        entry['node_graph_indices'] = tf.zeros((entry['n_atom'],))
-
-        # Run the molecule as a batch
-        output = self.model.predict_on_batch(entry)
-        return float(output[0, 0])
+        energy = run_inference(self.model, graph)
+        return energy / len(graph) if self.per_water else energy

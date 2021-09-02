@@ -8,7 +8,7 @@ def triangle_cluster() -> nx.DiGraph:
     # Add three nodes
     g = nx.DiGraph()
     for i in range(3):
-        g.add_node(i)
+        g.add_node(i, label='O')
 
     # Make it so they are bonded in a circle
     for a in range(3):
