@@ -5,19 +5,19 @@ from hydronet.rl.tf.distribution import MultiCategorical
 
 def test_multicategorical():
     # Test with a single batch to make sure actions work
-    dist = MultiCategorical(tf.Variable([
+    dist = MultiCategorical(tf.math.log(tf.Variable([
         [[0.2, 0.1], [0.3, 0.4]]
-    ]), 2)
+    ])), 2)
     assert dist.sample(8).shape == (8, 1, 2)
     assert dist.mode().shape == (1, 2)
     assert (dist.mode() == [1, 1]).numpy().all()
     assert dist.prob([[0, 1]]) == 0.1
 
     # Use two batches to make sure samples are the same
-    dist = MultiCategorical(tf.constant([
+    dist = MultiCategorical(tf.math.log(tf.constant([
         [[0.1, 0.9], [0, 0]],  # Only [0, 0] and [0, 1]
         [[0, 0], [0.1, 0.9]]  # Only [1, 0] and [1, 1]
-    ]), 2)
+    ])), 2)
     samples = dist.sample(3)
     assert samples.shape == (3, 2, 2)
 
@@ -55,3 +55,10 @@ def test_multicategorical():
     # Compute entropy
     assert dist.entropy().shape == (1, 2, 2)
     assert dist.entropy().numpy().all() > 0
+
+    # Test derivatives of entropy
+    with tf.GradientTape() as tape:
+        dist = MultiCategorical(input_probs, 2)
+        entropy = tf.reduce_sum(dist.entropy())
+    grads = tape.gradient(entropy, input_probs)
+    assert not tf.reduce_any(tf.math.is_nan(grads)).numpy()

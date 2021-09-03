@@ -7,13 +7,13 @@ import six
 class MultiCategorical(Distribution):
     """Categorical distribution where the choice from each category are related"""
 
-    def __init__(self, probs, n_categories: int):
+    def __init__(self, logits, n_categories: int):
         """
 
         Parameters
         ----------
-        probs:
-            NDMatrix where each entry is the probability for a certain category.
+        logits:
+            NDMatrix where each entry is an unnormalized log-probability for a certain category.
             Shape have at least as many dimensions as the number of categories.
             Outer dimensions are treated as batch dimensions
         n_categories: int
@@ -23,7 +23,7 @@ class MultiCategorical(Distribution):
             dtype=tf.int32, reparameterization_type=reparameterization.NOT_REPARAMETERIZED,
             validate_args=False, allow_nan_stats=True
         )
-        self.input_shape = tf.shape(probs)
+        self.input_shape = tf.shape(logits)
         self._outer_shape = self.input_shape[:-n_categories]
         self.batch_dims = tf.shape(self.input_shape)[0] - n_categories
         self.batch_size = tf.reduce_prod(self._outer_shape)
@@ -32,10 +32,10 @@ class MultiCategorical(Distribution):
         self._dtype = self.input_shape.dtype
 
         # Flatten to seem like a single set of categories for each batch
-        self._logits = tf.math.log(probs)
-        self._probs = probs
+        self._logits = logits
         self._logits_flat = tf.reshape(self._logits, (self.batch_size, -1))
-        self._probs_flat = tf.reshape(probs, (self.batch_size, -1))
+        self._probs_flat = tf.nn.softmax(self._logits_flat)
+        self._probs = tf.reshape(self._probs_flat, self.input_shape)
 
     def _sample_n(self, n, seed=None, **kwargs):
         # Make the sampling
@@ -73,10 +73,14 @@ class MultiCategorical(Distribution):
 
     @property
     def logits(self):
-        return self._logits_flat
+        return self._logits
 
-    def _prob(self, value):
-        return tf.gather_nd(self._probs, value, batch_dims=self.batch_dims)
+    @property
+    def probs(self):
+        return self._probs
+
+    def _log_prob(self, value):
+        return tf.gather_nd(self._logits, value, batch_dims=self.batch_dims)
 
     def _batch_shape(self):
         return self._outer_shape
@@ -85,8 +89,7 @@ class MultiCategorical(Distribution):
         return tf.TensorSpec(self._outer_shape)
 
     def _entropy(self, **kwargs):
-        entropy = Categorical(self._logits_flat).entropy()  # (batch_size,)
-        # Reshape into desired form
+        entropy = Categorical(logits=self._logits_flat).entropy()  # (batch_size,)
         return tf.reshape(entropy, self._outer_shape)
 
     def _mode(self, **kwargs):

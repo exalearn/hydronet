@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from keras.layers import Embedding, Softmax, Dense
 from tf_agents.specs.distribution_spec import DistributionSpec
@@ -68,7 +69,7 @@ class GCPNActorNetwork(network.DistributionNetwork):
         self.message_layers = [MessageBlock(atom_dimension=node_features, name=f'message_{i}')
                                for i in range(num_messages)]
         self.softmax = Softmax(axis=[1, 2])  # Axis 0 is the batch axis
-        self.output_dense = [Dense(node_features * 2, activation='relu', name=f'pair_{i}') for i in range(output_layers)]
+        self.output_dense = [Dense(node_features * 2, activation='tanh', name=f'pair_{i}') for i in range(output_layers)]
         self.output_dense.append(Dense(1, name='pair_last'))
 
     def create_variables(self, input_tensor_spec=None, **kwargs):
@@ -156,8 +157,12 @@ class GCPNActorNetwork(network.DistributionNetwork):
         for layer in self.output_dense:
             pair_values = layer(pair_values)
 
-        # Compute the probabilities using softmax. We will mask the pairs that are invalid
-        pair_probs = self.softmax(pair_values[:, :, :, 0], allowed_actions)
+        # Set the logit for disallowed actions to negative infinity using softmax (making them a probability of 0)
+        pair_logits = tf.where(
+            allowed_actions == 1,
+            pair_values[:, :, :, 0],
+            -np.inf
+        )
 
         # Special case: If no actions are allowed, then allow all actions with equal probabilities
         #  Addresses a weird problem: If there are no valid actions then a policy agent will
@@ -166,17 +171,17 @@ class GCPNActorNetwork(network.DistributionNetwork):
         #  Many training algorithms use the log-probability in the loss functions and doing math
         #  with infinities results will result in numerical problems when computing loss.
         no_allowed_actions = tf.reduce_all(allowed_actions == 0, axis=[1, 2], keepdims=True)
-        pair_probs = tf.where(
+        pair_logits = tf.where(
             tf.tile(no_allowed_actions, (1, nodes_per_graph, nodes_per_graph)),
-            1. / tf.cast(nodes_per_graph * nodes_per_graph, tf.float32),
-            pair_probs
+            1.,
+            pair_logits
         )
 
         # Shape the outputs like the original input shape
-        bond_counts = tf.shape(pair_probs)[-1]
+        bond_counts = tf.shape(pair_logits)[-1]
         output_shape = tf.concat((outer_shape, (batch_size, bond_counts, bond_counts)), axis=0)
-        pair_probs = tf.reshape(pair_probs, output_shape)
-        return MultiCategorical(pair_probs, 2), ()
+        pair_logits = tf.reshape(pair_logits, output_shape)
+        return MultiCategorical(pair_logits, 2), ()
 
     def perform_message_passing(self, observations):
         """Produce features for each node using message passing
