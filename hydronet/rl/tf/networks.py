@@ -21,7 +21,8 @@ class GCPNActorNetwork(network.DistributionNetwork):
     """
 
     def __init__(self, observation_spec, action_spec, example_timestep: TimeStep,
-                 num_messages: int = 1, node_features: int = 32):
+                 output_layers: int = 2, num_messages: int = 1,
+                 node_features: int = 32, graph_features: bool = True):
         """
 
         Args:
@@ -30,11 +31,14 @@ class GCPNActorNetwork(network.DistributionNetwork):
             example_timestep: Example timestep used when initializing the network
             num_messages: Number of message-passing steps
             node_features: Number of features to use to represent a node
+            graph_features: Whether to combine node- and graph-level features (or just node features)
+                to describe a pair of nodes. Graph-level features are created by summing over all nodes
         """
 
         # Store the specifications
         self.example_timestep = example_timestep.observation
         self.action_spec = action_spec
+        self.graph_features = graph_features
 
         # Build the output specification for the network, which define the distribution and samples
         max_nodes = example_timestep.observation['atom'].shape[0]
@@ -64,8 +68,8 @@ class GCPNActorNetwork(network.DistributionNetwork):
         self.message_layers = [MessageBlock(atom_dimension=node_features, name=f'message_{i}')
                                for i in range(num_messages)]
         self.softmax = Softmax(axis=[1, 2])  # Axis 0 is the batch axis
-        self.output_dense = [Dense(node_features, name=f'pair_{i}') for i in range(2)]
-        self.output_dense.append(Dense(1, name='pair_1'))
+        self.output_dense = [Dense(node_features * 2, activation='relu', name=f'pair_{i}') for i in range(output_layers)]
+        self.output_dense.append(Dense(1, name='pair_last'))
 
     def create_variables(self, input_tensor_spec=None, **kwargs):
         # TF-Agents generates a random input to run through the network,
@@ -130,13 +134,22 @@ class GCPNActorNetwork(network.DistributionNetwork):
         # Make features for each atom using message-passing
         atom_features = self.perform_message_passing(observations)
 
+        # If desired, compute a single feature for the whole graph
+
         # We will predict the probability for each source/destination pair
         # Make a Cartesian product of all sensor actor/pairs
         _, nodes_per_graph = tf.shape(observations['atom'])
-        pair_features = tf.concat([
+        pair_features = [
             tf.tile(tf.expand_dims(atom_features, 2), (1, 1, nodes_per_graph, 1)),
             tf.tile(tf.expand_dims(atom_features, 1), (1, nodes_per_graph, 1, 1)),
-        ], axis=3)  # shape: (batch_size, nodes_per_graph, atom_features * 2)
+        ]
+        if self.graph_features:
+            graph_features = tf.reduce_sum(atom_features, axis=1, keepdims=True)
+            pair_features.append(
+                tf.tile(tf.expand_dims(graph_features, 1), (1, nodes_per_graph, nodes_per_graph, 1))
+            )
+
+        pair_features = tf.concat(pair_features, axis=3)  # shape: (batch_size, nodes_per_graph, atom_features * [2|3])
 
         # Pass them through dense layers to get a single value per pair
         pair_values = pair_features

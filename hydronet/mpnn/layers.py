@@ -31,9 +31,9 @@ class MessageBlock(layers.Layer):
         self.activation = activation
         self.atom_bn = layers.BatchNormalization()
         self.bond_bn = layers.BatchNormalization()
-        self.bond_update_1 = layers.Dense(2 * atom_dimension, activation='tanh', use_bias=False)
+        self.bond_update_1 = layers.Dense(2 * atom_dimension, activation=activation, use_bias=False)
         self.bond_update_2 = layers.Dense(atom_dimension)
-        self.atom_update = layers.Dense(atom_dimension, activation='tanh', use_bias=False)
+        self.atom_update = layers.Dense(atom_dimension, activation=activation, use_bias=False)
         self.atom_dimension = atom_dimension
 
     def call(self, inputs):

@@ -97,7 +97,7 @@ def test_random_with_driver(tf_env):
 
 
 def test_gcpn_network(tf_env, example_batch):
-    network = GCPNActorNetwork(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
+    network = GCPNActorNetwork(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset(), graph_features=True)
     batch = network.convert_env_to_mpnn_batch(example_batch['observation'])
     network.create_variables()
     assert 'node_graph_indices' in batch
