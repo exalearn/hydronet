@@ -84,6 +84,11 @@ class MultiCategorical(Distribution):
     def _batch_shape_tensor(self):
         return tf.TensorSpec(self._outer_shape)
 
+    def _entropy(self, **kwargs):
+        entropy = Categorical(self._logits_flat).entropy()  # (batch_size,)
+        # Reshape into desired form
+        return tf.reshape(entropy, self._outer_shape)
+
     def _mode(self, **kwargs):
         # Get the most-probable sample for each
         idx_max = tf.argmax(self._probs_flat, axis=-1, output_type=self.dtype)  # batch_shape

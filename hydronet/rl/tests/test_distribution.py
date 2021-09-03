@@ -51,3 +51,7 @@ def test_multicategorical():
         [[0, 1], [1, 1]],
         [[1, 0], [1, 1]]
     ]]).numpy().all()
+
+    # Compute entropy
+    assert dist.entropy().shape == (1, 2, 2)
+    assert dist.entropy().numpy().all() > 0
