@@ -68,7 +68,6 @@ class GCPNActorNetwork(network.DistributionNetwork):
         self.bond_embedding = Embedding(2, node_features)
         self.message_layers = [MessageBlock(atom_dimension=node_features, name=f'message_{i}')
                                for i in range(num_messages)]
-        self.softmax = Softmax(axis=[1, 2])  # Axis 0 is the batch axis
         self.output_dense = [Dense(node_features * 2, activation='tanh', name=f'pair_{i}') for i in range(output_layers)]
         self.output_dense.append(Dense(1, name='pair_last'))
 
@@ -145,7 +144,12 @@ class GCPNActorNetwork(network.DistributionNetwork):
             tf.tile(tf.expand_dims(atom_features, 1), (1, nodes_per_graph, 1, 1)),
         ]
         if self.graph_features:
-            graph_features = tf.reduce_sum(atom_features, axis=1, keepdims=True)
+            valid_atom_features = tf.where(
+                tf.expand_dims(observations['is_atom'], axis=-1),
+                atom_features,
+                0
+            )
+            graph_features = tf.reduce_sum(valid_atom_features, axis=1, keepdims=True)
             pair_features.append(
                 tf.tile(tf.expand_dims(graph_features, 1), (1, nodes_per_graph, nodes_per_graph, 1))
             )
@@ -212,3 +216,7 @@ class GCPNActorNetwork(network.DistributionNetwork):
         # Reshape the atom features so they are arranged (cluster, atom, feature)
         atom_features = tf.reshape(atom_features, (batch_size, nodes_per_graph, self.node_features))
         return atom_features
+
+
+class GCPNCriticNetwork(network.Network):
+    """Produce a single """

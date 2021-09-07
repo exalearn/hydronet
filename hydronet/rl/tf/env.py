@@ -5,7 +5,7 @@ import logging
 import numpy as np
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.trajectories import time_step as ts
-from tf_agents.specs import BoundedArraySpec
+from tf_agents.specs import BoundedArraySpec, ArraySpec
 from tf_agents.typing import types
 import networkx as nx
 
@@ -38,7 +38,7 @@ class SimpleEnvironment(PyEnvironment):
 
     def __init__(self, reward: RewardFunction = None, maximum_size: int = 10,
                  init_cluster: nx.DiGraph = None, discount_factor: float = 1.0,
-                 only_last: bool = True):
+                 only_last: bool = False):
         """
 
         Parameters
@@ -85,6 +85,7 @@ class SimpleEnvironment(PyEnvironment):
         return {
             'n_atoms': BoundedArraySpec((), minimum=0, dtype='int32', name='n_atoms'),
             'n_bonds': BoundedArraySpec((), minimum=0, dtype='int32', name='n_bonds'),
+            'is_atom': ArraySpec((n,), dtype='bool', name='is_atom'),
             'atom': BoundedArraySpec((n,), minimum=0, maximum=1, dtype='int32'),
             'bond': BoundedArraySpec((n * 4,), minimum=0, maximum=1, dtype='int32'),
             'connectivity': BoundedArraySpec((n * 4, 2), minimum=0, maximum=n, dtype='int32'),
@@ -103,6 +104,7 @@ class SimpleEnvironment(PyEnvironment):
         output = {
             'n_atoms': np.array(simple_graph['n_atoms'], np.int32),
             'n_bonds': np.array(simple_graph['n_bonds'], np.int32),
+            'is_atom': np.arange(n) < simple_graph['n_atoms'],
             'atom': np.zeros((n,), dtype=np.int32),
             'bond': np.zeros((n * 4,), dtype=np.int32),
             'connectivity': np.zeros((n * 4, 2), dtype=np.int32) + self.maximum_size + 1,
