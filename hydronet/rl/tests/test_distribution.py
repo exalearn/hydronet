@@ -29,6 +29,19 @@ def test_multicategorical():
     assert (dist.mode().numpy() == [[0, 1], [1, 1]]).all()
     assert (dist.prob([[0, 0], [1, 1]]) == [0.1, 0.9]).numpy().all()
 
+    # Make sure we can handle unnormalized logits by verifying probabilities add up to maximum
+    dist = MultiCategorical(tf.constant([
+        [[0.1, 0.9], [0, 0]],  # Only [0, 0] and [0, 1]
+        [[0, 0], [0.1, 0.9]]  # Only [1, 0] and [1, 1]
+    ]), 2)
+    probs = []
+    for i in range(2):
+        for j in range(2):
+            probs_ij = dist.prob([[i, j]]*2)
+            assert probs_ij.numpy().min() >= 0 and probs_ij.numpy().max() <= 1
+            probs.append(probs_ij)
+    assert tf.reduce_sum(probs) == 2  # Two different samples
+
     # Make sure it has derivatives
     input_probs = tf.Variable([
         [[0.1, 0.9], [0, 0]],  # Only [0, 0] and [0, 1]
@@ -47,6 +60,7 @@ def test_multicategorical():
         [[[0, 0], [0.9, 0.1]], [[0, 0], [0.1, 0.9]]],
     ]])
     dist = MultiCategorical(input_probs, 2)
+    dist.log_prob([[[0, 1]], [[1, 0]]])
     assert tf.equal(dist.mode(), [[
         [[0, 1], [1, 1]],
         [[1, 0], [1, 1]]

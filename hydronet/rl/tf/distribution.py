@@ -31,6 +31,12 @@ class MultiCategorical(Distribution):
         self.n_categories = n_categories
         self._dtype = self.input_shape.dtype
 
+        # Used when raveling indices
+        #  Thanks to: https://stackoverflow.com/questions/58398790/does-tensorflow-have-an-inverse-of-tf-unravel-index
+        self.strides = tf.expand_dims(
+            tf.math.cumprod(self.category_shape, reverse=True, exclusive=True), axis=0
+        )
+
         # Flatten to seem like a single set of categories for each batch
         self._logits = logits
         self._logits_flat = tf.reshape(self._logits, (self.batch_size, -1))
@@ -80,7 +86,17 @@ class MultiCategorical(Distribution):
         return self._probs
 
     def _log_prob(self, value):
-        return tf.gather_nd(self._logits, value, batch_dims=self.batch_dims)
+        # Remove batch dimensions
+        flat_values = tf.reshape(value, shape=(self.batch_size, -1))
+
+        # Map value to a flat index
+        flat_ind = tf.reduce_sum(flat_values * self.strides, axis=1)
+
+        # Convert a normalized log probability for the selected action
+        log_prob = -tf.nn.sparse_softmax_cross_entropy_with_logits(flat_ind, self._logits_flat)
+
+        # Apply the batch shape
+        return tf.reshape(log_prob, self._outer_shape)
 
     def _batch_shape(self):
         return self._outer_shape
@@ -120,15 +136,5 @@ def _kl_categorical_categorical(a, b, name=None):
     Returns:
       Batchwise KL(a || b)
     """
-    with tf.name_scope(name or 'kl_mcategorical_mcategorical'):
-        # Compute the KL divergence
-        a_logits = a._logits_flat  # pylint:disable=protected-access
-        b_logits = b._logits_flat  # pylint:disable=protected-access
-        kl = tf.reduce_sum(
-            tf.math.multiply_no_nan(
-                tf.math.log_softmax(a_logits) - tf.math.log_softmax(b_logits),
-                tf.math.softmax(a_logits)),
-            axis=-1)
-
-        # Reshape the output to have the correct outer shape
-        return tf.reshape(kl, a._outer_shape)  # pylint:disable=protected-access
+    kl = Categorical(a._logits_flat).kl_divergence(Categorical(b._logits_flat))
+    return tf.reshape(kl, a._outer_shape)  # pylint:disable=protected-access
