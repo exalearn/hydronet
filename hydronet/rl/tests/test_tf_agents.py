@@ -1,4 +1,5 @@
 import numpy as np
+from tf_agents.agents import PPOAgent
 from tf_agents.drivers.dynamic_step_driver import DynamicStepDriver
 from tf_agents.policies import ActorPolicy
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
@@ -9,7 +10,7 @@ import tensorflow as tf
 from pytest import fixture
 from tf_agents.typing.types import NestedTensor
 
-from hydronet.rl.tf.networks import GCPNActorNetwork
+from hydronet.rl.tf.networks import GCPNActorNetwork, convert_env_to_mpnn_batch, GCPNCriticNetwork
 from hydronet.rl.tf.agents import ConstrainedRandomPolicy
 from hydronet.rl.tf.env import SimpleEnvironment
 
@@ -97,9 +98,9 @@ def test_random_with_driver(tf_env):
     driver.run(init_ts)
 
 
-def test_gcpn_network(tf_env, example_batch):
+def test_gcpn_actor_network(tf_env, example_batch):
     network = GCPNActorNetwork(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset(), graph_features=True)
-    batch = network.convert_env_to_mpnn_batch(example_batch['observation'])
+    batch = convert_env_to_mpnn_batch(example_batch['observation'])
     network.create_variables()
     assert 'node_graph_indices' in batch
     assert batch['node_graph_indices'].numpy().max() == 1
@@ -115,7 +116,7 @@ def test_gcpn_network(tf_env, example_batch):
     assert all(not tf.reduce_all(tf.math.is_nan(g)).numpy() for g in grads)
 
 
-def test_gcpn_policy(tf_env):
+def test_gcpn_actor_policy(tf_env):
     network = GCPNActorNetwork(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
     actor = ActorPolicy(
         tf_env.time_step_spec(),
@@ -138,3 +139,36 @@ def test_gcpn_policy(tf_env):
         max_prob = tf.reduce_max(dist.action.log_prob(dist.action.mode()))
     grads = tape.gradient(max_prob, network.trainable_variables)
     assert all(not tf.reduce_all(tf.math.is_nan(g)).numpy() for g in grads)
+
+
+def test_gcpn_value_network(tf_env, example_batch):
+    network = GCPNCriticNetwork(tf_env.observation_spec(), tf_env.reset())
+    batch = convert_env_to_mpnn_batch(example_batch['observation'])
+    network.create_variables()
+    assert 'node_graph_indices' in batch
+    assert batch['node_graph_indices'].numpy().max() == 1
+
+    value_pred, _ = network.call(example_batch['observation'])
+    assert value_pred.shape == (2,)
+
+    # See if the network is differentiable
+    with tf.GradientTape() as tape:
+        value, _ = network.call(example_batch['observation'])
+        max_value = tf.reduce_max(value)
+    grads = tape.gradient(max_value, network.trainable_variables)
+    assert all(not tf.reduce_all(tf.math.is_nan(g)).numpy() for g in grads)
+
+
+def test_ppo_policy(tf_env, example_batch):
+    actor_net = GCPNActorNetwork(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
+    critic_net = GCPNCriticNetwork(tf_env.observation_spec(), tf_env.reset())
+    tf_agent = PPOAgent(
+        tf_env.time_step_spec(),
+        tf_env.action_spec(),
+        actor_net=actor_net,
+        value_net=critic_net,
+        optimizer=tf.keras.optimizers.Adam(1e-4),
+        normalize_observations=False,
+    )
+    tf_agent.initialize()
+    tf_agent.collect_policy.action(tf_env.reset())
