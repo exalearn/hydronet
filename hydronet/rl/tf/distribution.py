@@ -1,4 +1,4 @@
-from tensorflow_probability.python.distributions import Distribution, Categorical
+from tensorflow_probability.python.distributions import Distribution, Categorical, kullback_leibler
 from tensorflow_probability.python.internal import reparameterization, samplers, parameter_properties
 import tensorflow as tf
 import six
@@ -7,7 +7,7 @@ import six
 class MultiCategorical(Distribution):
     """Categorical distribution where the choice from each category are related"""
 
-    def __init__(self, logits, n_categories: int):
+    def __init__(self, logits, n_categories: int = 2):
         """
 
         Parameters
@@ -105,3 +105,30 @@ class MultiCategorical(Distribution):
         # Convert them to the proper shape
         ind_mode = tf.transpose(ind_mode)  # (batch_size, n_dim)
         return tf.reshape(ind_mode, tf.concat((self._outer_shape, [self.n_categories]), axis=0))
+
+
+@kullback_leibler.RegisterKL(MultiCategorical, MultiCategorical)
+def _kl_categorical_categorical(a, b, name=None):
+    """Calculate the batched KL divergence KL(a || b) with a and b MultiCategorical.
+
+    Args:
+      a: instance of a Categorical distribution object.
+      b: instance of a Categorical distribution object.
+      name: Python `str` name to use for created operations.
+        Default value: `None` (i.e., `'kl_categorical_categorical'`).
+
+    Returns:
+      Batchwise KL(a || b)
+    """
+    with tf.name_scope(name or 'kl_mcategorical_mcategorical'):
+        # Compute the KL divergence
+        a_logits = a._logits_flat  # pylint:disable=protected-access
+        b_logits = b._logits_flat  # pylint:disable=protected-access
+        kl = tf.reduce_sum(
+            tf.math.multiply_no_nan(
+                tf.math.log_softmax(a_logits) - tf.math.log_softmax(b_logits),
+                tf.math.softmax(a_logits)),
+            axis=-1)
+
+        # Reshape the output to have the correct outer shape
+        return tf.reshape(kl, a._outer_shape)  # pylint:disable=protected-access

@@ -52,6 +52,10 @@ def test_multicategorical():
         [[1, 0], [1, 1]]
     ]]).numpy().all()
 
+    # Compute the KL divergence with self
+    kl = dist.kl_divergence(dist)
+    assert kl.shape == (1, 2, 2)
+
     # Compute entropy
     assert dist.entropy().shape == (1, 2, 2)
     assert dist.entropy().numpy().all() > 0
