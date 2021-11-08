@@ -2,7 +2,7 @@
 
 import numpy as np
 import tensorflow as tf
-from keras.layers import Embedding, Dense
+from tensorflow.keras.layers import Embedding, Dense
 from tf_agents.specs.distribution_spec import DistributionSpec
 from tf_agents.specs import BoundedTensorSpec, TensorSpec
 from tf_agents.trajectories import time_step
