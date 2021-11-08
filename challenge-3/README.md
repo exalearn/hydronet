@@ -4,11 +4,14 @@ The number of possible water clusters explodes combinatorially with the number o
 Finding the lowest-energy structures in this space is a grand challenge in science.
 
 Here we provide a script to evaluate generated clusters by assessing whether their bonding structures are similar to known water clusters.
+
 The "eval.py" script reads in a set of water clusters provided by you and measures the different between their distribution 
 graph properties to a reference set of known water molecules.
 
+The "Test_set_evaluation.py" script also reads a set of provided water clusters, it will create an energy distribution plot of input structures, indicating how far they are from the reference – water molecules with the lowest energy. It will also compare the structural similarity between provided water molecules and the reference in terms of graph similarity and projected graph similarity, generating distribution plots on the top of that. Example plots could be found under "example" folder.
+
 ### Running the script
-eval.py supports two formats for your data:
+eval.py and Test_set_evaluation.py supports two formats for your data:
 * xyz format with coordinates in Angstroms
 * graph format as given in the Hydronet dataset
 
@@ -18,12 +21,16 @@ The file with statistics of known clusters, `features.csv` must be downloaded to
 ```
 python eval.py -data yourdata.xyz -size 10 -stat ks
 ```
-
+```
+python Test_set_evaluation.py -data yourdata.xyz -size 10 -stat ks
+```
 #### Graph format
 ```
 python eval.py -data yourdata.json.gz -datatype graph -size 10 -stat ks
 ```
-
+```
+python Test_set_evaluation.py -data yourdata.json.gz -datatype graph -size 10 -stat ks
+```
 
 ### Supported metrics
 
