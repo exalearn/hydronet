@@ -39,6 +39,10 @@ def make_reward(args):
         model = tf.keras.models.load_model(args.mpnn_path, custom_objects=custom_objects)
         reward = MPNNReward(model, per_water=False)
         return reward, True
+    elif args.reward == 'mpnn':
+        model = tf.keras.models.load_model(args.mpnn_path, custom_objects=custom_objects)
+        reward = MPNNReward(model, per_water=True)
+        return reward, False
     else:
         raise ValueError(f'Undefined reward function: {args.reward}')
         
@@ -95,7 +99,8 @@ if __name__ == "__main__":
     
     #   Group 1: Things related to the environment
     group = arg_parser.add_argument_group('Environment Options', 'Options related to the water cluster environment, such as reward structure')
-    group.add_argument('--reward', choices=['mpnn_last'], default='mpnn_last', help='Name of the reward function to use. Rewards are defined in code')
+    group.add_argument('--reward', choices=['mpnn_last', 'mpnn'],
+                       default='mpnn_last', help='Name of the reward function to use. Rewards are defined in code')
     group.add_argument('--mpnn-path', default=str(_mpnn_path), help='Path to the MPNN used for evaluating energy, if needed')
     group.add_argument('--max-size', default=10, help='Maximum size of the water cluster.', type=int)
     
@@ -111,7 +116,8 @@ if __name__ == "__main__":
     #   Group 3: Related to the PPO learner
     group = arg_parser.add_argument_group('PPO Options', 'Options related to the PPO learner')
     group.add_argument('--ppo-learning-rate', default=1e-3, type=float, help='Learning reate for PPO')
-    group.add_argument('--ppo-entropy-regularizer', default=1e-4, type=float, help='Entropy regularization for PPO')
+    group.add_argument('--ppo-entropy-regularization', default=1e-4, type=float, help='Entropy regularization for PPO')
+    group.add_argument('--ppo-discount', default=1, type=float, help='Discount factor for reward')
     
     #    Group 4: Related to the driver/learner
     group = arg_parser.add_argument_group('Driver Options', 'Options for the driver/learner')
@@ -171,8 +177,8 @@ if __name__ == "__main__":
         value_net=critic_net,
         optimizer=tf.keras.optimizers.Adam(args.ppo_learning_rate),
         normalize_observations=False,
-        entropy_regularization=1e-4,
-        discount_factor=1.,
+        entropy_regularization=args.ppo_entropy_regularization,
+        discount_factor=args.ppo_discount,
     )
     tf_agent.initialize()
     
