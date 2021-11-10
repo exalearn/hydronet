@@ -29,14 +29,15 @@ def convert_env_to_mpnn_batch(batch: [str, tf.Tensor]) -> NestedTensor:
     batch = batch.copy()
 
     # Set the number of atoms and bonds to include the dummy nodes/edges
-    batch_size, max_atoms = tf.shape(batch['atom'])
-    _, max_bonds = tf.shape(batch['bond'])
-    batch['n_atoms'] = tf.zeros((batch_size,), dtype=tf.int32) + max_atoms
-    batch['n_bonds'] = tf.zeros((batch_size,), dtype=tf.int32) + max_bonds
+    batch_info = tf.shape(batch['atom'])
+    batch_size = batch_info[0]
+    bond_info = tf.shape(batch['bond'])
+    batch['n_atoms'] = tf.zeros((batch_size,), dtype=tf.int32) + batch_info[1]
+    batch['n_bonds'] = tf.zeros((batch_size,), dtype=tf.int32) + bond_info[1]
 
     # Flatten the atom and bond arrays
-    batch['atom'] = tf.reshape(batch['atom'], (batch_size * max_atoms))
-    batch['bond'] = tf.reshape(batch['bond'], (batch_size * max_bonds))
+    batch['atom'] = tf.reshape(batch['atom'], (batch_size * batch_info[1],))
+    batch['bond'] = tf.reshape(batch['bond'], (batch_size * bond_info[1],))
 
     return combine_graphs(batch)
 
@@ -81,6 +82,7 @@ class MPNNNetworkMixin:
         self.message_layers = [MessageBlock(atom_dimension=node_features, name=f'message_{i}')
                                for i in range(num_messages)]
 
+    @tf.function
     def perform_message_passing(self, observations):
         """Produce features for each node using message passing
 
@@ -94,7 +96,7 @@ class MPNNNetworkMixin:
             (batch_size, nodes_per_graph, num_features) array of features for each node
         """
         # Get the number of nodes per graph
-        batch_size, nodes_per_graph = tf.shape(observations['atom'])
+        batch_info = tf.shape(observations['atom'])
 
         # Prepare the data in a form ready for the neural network
         batch = convert_env_to_mpnn_batch(observations)
@@ -108,7 +110,7 @@ class MPNNNetworkMixin:
             atom_features, bond_features = message_layer([atom_features, bond_features, batch['connectivity']])
 
         # Reshape the atom features so they are arranged (cluster, atom, feature)
-        atom_features = tf.reshape(atom_features, (batch_size, nodes_per_graph, self.node_features))
+        atom_features = tf.reshape(atom_features, (batch_info[0], batch_info[1], self.node_features))
         return atom_features
 
 
@@ -196,7 +198,7 @@ class GCPNActorNetwork(MPNNNetworkMixin, network.DistributionNetwork,):
         atom_features = self.perform_message_passing(observations)
 
         # Make a Cartesian product of the features source/destination pairs
-        _, nodes_per_graph = tf.shape(observations['atom'])
+        nodes_per_graph = tf.shape(observations['atom'])[1]
         pair_features = [
             tf.tile(tf.expand_dims(atom_features, 2), (1, 1, nodes_per_graph, 1)),
             tf.tile(tf.expand_dims(atom_features, 1), (1, nodes_per_graph, 1, 1)),

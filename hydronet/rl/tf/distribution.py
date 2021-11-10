@@ -58,7 +58,8 @@ class MultiCategorical(Distribution):
             self.category_shape
         )  # (n_dim, self.n_samples), Samples are ordered (n samples from batch_0, n samples from batch_1, ...)
         #  So, the last varying dimension is "n"
-        ind_samples = tf.reshape(ind_samples, tf.concat([[self.n_categories], self.batch_shape, [n]], 0))
+        out_shape = tf.concat([[self.n_categories], [-1], [n]], 0)
+        ind_samples = tf.reshape(ind_samples, out_shape)
 
         # TFP expects the number of samples to be the first dimension
         perm = tf.concat([
@@ -97,12 +98,6 @@ class MultiCategorical(Distribution):
 
         # Apply the batch shape
         return tf.reshape(log_prob, self._outer_shape)
-
-    def _batch_shape(self):
-        return self._outer_shape
-
-    def _batch_shape_tensor(self):
-        return tf.TensorSpec(self._outer_shape)
 
     def _entropy(self, **kwargs):
         entropy = Categorical(logits=self._logits_flat).entropy()  # (batch_size,)
