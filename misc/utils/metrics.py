@@ -34,6 +34,20 @@ def compute_metrics(G):
     
     return np.array([tri,tetra,pent,hexa,aspl,weiner])
 
+
+
+
+def get_metrics_from_df(df, n_waters, column='graph', labels=['trimers','tetramers','pentamers',
+                                                              'hexamers','shortest_path','wiener']):
+    df = df.loc[df['size']==n_waters]
+    data=np.vstack([compute_metrics(df.iloc[i][column]) for i in range(len(df))]).T
+
+    df_metrics=pd.DataFrame({labels[i]:data[i] for i in range(len(labels))})
+
+    return df_metrics
+
+
+
 '''
    Eigenvector Similarity. Calculate the Laplacian eigenvalues for the adjacency matrices of each graph.
    For each graph, find the smallest k such that the sum of the k largest eigenvalues constitutes at least

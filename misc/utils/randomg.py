@@ -1,6 +1,10 @@
 import numpy as np
 import pandas as pd
 import networkx as nx
+from utils import metrics
+from ttm.ase import SciPyFminLBFGSB, TTMCalculator
+from hydronet.importing import create_graph, coarsen_graph
+from hydronet.inverting import convert_directed_graph_to_xyz
 
 def generate_with_constraints(n_waters, bidirectional=False):
     '''
@@ -81,8 +85,40 @@ def generate_random_sample(n_waters, n=1000):
     return df
 
 
+def generate_relaxed_sample(n_waters, 
+                            labels= ['trimers', 'tetramers', 'pentamers', 
+                                     'hexamers', 'shortest_path', 'wiener']):
+    '''returns dictionary of metrics with the relaxed graph'''
+    G = generate_random_graph(n_waters)
+    G = graph_relaxation(G)
+    results = {labels[i]: val for i, val in enumerate(metrics.compute_metrics(G))}
+    results['graph']=G
+    
+    return results
+
+
 def set_category(G):
     [nx.set_edge_attributes(G, {edge: {"cat":1}}) if G.edges[edge]['label']=='donate' else nx.set_edge_attributes(G, {edge: {"cat":0}}) for edge in G.edges]
     return G
+
+
+def graph_relaxation(G, calc=TTMCalculator(), fmax=0.05):
+    # convert atoms to coords
+    atoms = convert_directed_graph_to_xyz(G)
+
+    # add claculator
+    atoms.calc = calc
+
+    # relax structure
+    dyn = SciPyFminLBFGSB(atoms)
+    dyn.run(fmax=fmax)
+    final_e = calc.get_potential_energy(atoms)
+
+    # check if graph structure changed
+    Hr = create_graph(atoms)
+    Gr = coarsen_graph(Hr)
+    Gr.graph['energy']=final_e
+
+    return Gr
 
 
