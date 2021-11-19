@@ -5,7 +5,7 @@ channels:
   - pytorch
 dependencies:
   - python==3.*
-  - tensorflow-gpu==2.2.*
+  - tensorflow-gpu==2.5.*
   - ase==3.19.*
   - pytorch>=1
   - networkx==2.4.*
