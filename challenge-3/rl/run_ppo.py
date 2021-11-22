@@ -14,9 +14,14 @@ from tqdm import tqdm
 import tensorflow as tf
 import pandas as pd
 
+
+import sys
+sys.path.insert(0,'/people/pope044/Exalearn/hydronet')
+
 from hydronet.rl.tf.networks import GCPNActorNetwork, GCPNCriticNetwork
 from hydronet.rl.tf.env import SimpleEnvironment
 from hydronet.rl.rewards.mpnn import MPNNReward
+from hydronet.rl.rewards.geom import CyclesReward
 from hydronet.mpnn.layers import custom_objects
 from hydronet.utils import get_platform_info
 
@@ -42,6 +47,9 @@ def make_reward(args):
     elif args.reward == 'mpnn':
         model = tf.keras.models.load_model(args.mpnn_path, custom_objects=custom_objects)
         reward = MPNNReward(model, per_water=True)
+        return reward, False
+    elif args.reward == 'cycles':
+        reward = CyclesReward(weight=False)
         return reward, False
     else:
         raise ValueError(f'Undefined reward function: {args.reward}')
@@ -99,7 +107,7 @@ if __name__ == "__main__":
     
     #   Group 1: Things related to the environment
     group = arg_parser.add_argument_group('Environment Options', 'Options related to the water cluster environment, such as reward structure')
-    group.add_argument('--reward', choices=['mpnn_last', 'mpnn'],
+    group.add_argument('--reward', choices=['mpnn_last', 'mpnn', 'cycles'],
                        default='mpnn_last', help='Name of the reward function to use. Rewards are defined in code')
     group.add_argument('--mpnn-path', default=str(_mpnn_path), help='Path to the MPNN used for evaluating energy, if needed')
     group.add_argument('--max-size', default=10, help='Maximum size of the water cluster.', type=int)
