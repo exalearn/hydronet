@@ -1,10 +1,9 @@
-"""Functions for inverting a structure from graph to coordinates"""
+"""Force-directed approach for investing graph structures"""
 
 from ase.calculators.calculator import Calculator, all_changes
 from ase.optimize.bfgs import BFGS
 import networkx as nx
 import numpy as np
-from math import sqrt
 import ase
 import os
 
