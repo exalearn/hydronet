@@ -1,4 +1,5 @@
 """Force-directed approach for investing graph structures"""
+from typing import Tuple
 
 from ase.calculators.calculator import Calculator, all_changes
 from ase.optimize.bfgs import BFGS
@@ -12,6 +13,8 @@ _h20_bond_angle = 2 * np.pi * 104.5 / 360
 
 class HarmonicCalculator(Calculator):
     """Calculator where certain atoms are connected by a linear spring
+
+    Can also include a :math:`1 / r^6` repulsion force to prevent atoms from overlapping.
     
     Parameters
     ----------
@@ -21,10 +24,12 @@ class HarmonicCalculator(Calculator):
         Desired bond length
     k: float
         Bond strength
+    p: float
+        Repulsion strength
     """
     
     implemented_properties = ['forces', 'energy']
-    default_parameters = {'graph': None, 'r': 1., 'k': 1.}
+    default_parameters = {'graph': None, 'r': 1., 'k': 1., 'p': 1.}
     nolabel = True
     
     def calculate(
@@ -51,14 +56,50 @@ class HarmonicCalculator(Calculator):
             
             # Compute the forces
             forces[i, :] = np.sum((self.parameters.k * (dists - self.parameters.r) / dists)[:, None] * disps, axis=0)
+
+        # Compute contributions from the repulsive terms
+        #  TODO (wardlt): Would a soft sphere potential be more appropriate? That way it only competes with harmonic bonds when we have a
+        energy_contrib, force_contrib = self._soft_repulsion(atoms)
+        energy += energy_contrib
+        forces += force_contrib
             
         # Store the outputs
         self.results['energy'] = energy / 2
         self.results['forces'] = forces
 
+    def _soft_repulsion(self, atoms: ase.Atoms) -> Tuple[float, np.ndarray]:
+        """Generate and energy contributions from force due to a 1/r^6 potential
 
-def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5, 
-                                  hbond_distance: float = 2.9, relax_with_harmonic: bool = False) -> ase.Atoms:
+        Args:
+            atoms: Atoms
+        Returns:
+            - Contribution to energy
+            - Contribution to forces on each atom
+        """
+        #  First compute the distance between atoms
+        disps = atoms.positions[:, None, :] - atoms.positions[None, :, :]
+        dists = np.linalg.norm(disps, axis=1)
+
+        # Compute the energy contribution
+        np.fill_diagonal(dists, 1)  # To avoid divide by zero. We'll
+        energy_contrib = np.true_divide(self.parameters.p, np.power(dists, 6))
+        np.fill_diagonal(energy_contrib, 0)  # Make sure self interaction is zero
+
+        #  Compute the force contribution
+        #   TODO (wardlt): You got the LJ terms backwards. It's r^-12 for the repulsion term
+        force_contrib_factor = -6 * np.true_divide(self.parameters.p, np.power(dists, 7))
+        np.fill_diagonal(force_contrib_factor, 0)
+        force_contrib = force_contrib_factor * disps / dists  # Multiply by the direction atoms (displacement / distance)
+        force_contrib_per_atom = np.sum(force_contrib, axis=0)
+
+        return energy_contrib.sum(), force_contrib_per_atom
+
+
+def convert_directed_graph_to_xyz(graph: nx.DiGraph,
+                                  n_h_guesses: int = 5,
+                                  hbond_distance: float = 2.9,  # TODO (Wardlt): Experiment with this number! Joe/Sotiris prefer 2.7/2.8
+                                  relax_with_harmonic: bool = False,
+                                  repulsion_str: float = 10) -> ase.Atoms:
     """Generate initial coordinates for water cluster from the directed graph of bonded waters
 
     Args:
@@ -66,9 +107,8 @@ def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5,
         n_h_guesses: Number of guesses to make for each hydrogen position.
             We select the one that is farthest from all other atoms
         hbond_distance: Target oxygen-to-oxygen hydrogen bond distance
-        relax_with_harmonic: Whether to relax the structure with a harmonic potential
-            before adding hydrogens. Experimental feature.
-        
+        relax_with_harmonic: Whether to relax the oxygen network with a harmonic potential before adding hydrogens
+        repulsion_str: Strength of repulsion (1/r^6) between oxygens during oxygen framework relaxation
     Returns:
         Atoms object describing candidate position of hydrogens
     """
@@ -88,8 +128,7 @@ def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5,
     
     # Relax with a harmonic potential
     if relax_with_harmonic:
-        calc = HarmonicCalculator(graph=graph.to_undirected(), r=hbond_distance)
-        # TODO (wardlt): We likely need a simple repulsion to prevent overlap (as is used in nx.spring_layout)
+        calc = HarmonicCalculator(graph=graph.to_undirected(), r=hbond_distance, p=repulsion_str)
         o_atoms = ase.Atoms(positions=pos)
         o_atoms.set_calculator(calc)
         opt = BFGS(o_atoms, logfile=os.devnull)
@@ -108,7 +147,7 @@ def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5,
         
         # Compute position along A->B path
         vec = pos[b] - pos[a]
-        t = 0.9641 / np.linalg.norm(vec)
+        t = 0.9641 / np.linalg.norm(vec)  # TODO (wardlt): Joe found a different position gave better relaxation (0.99). Make this configurable
         
         # Clip it so that it is at least as close
         #  to the oxygen with the covalent bond
@@ -130,7 +169,9 @@ def convert_directed_graph_to_xyz(graph: nx.DiGraph, n_h_guesses: int = 5,
         if len(my_h) == 2:
             # TODO (wardlt): Force the angle to be ~106.5, rotating each bond towards each other
             continue
-        
+
+        # TODO (wardlt): Joe's heuristic is to pick the direction away from the center of mass.
+
         # If you have none, first place one randomly
         #  Use Gaussian-distributed points to generate random points
         #  https://mathworld.wolfram.com/SpherePointPicking.html

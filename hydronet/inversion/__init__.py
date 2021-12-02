@@ -4,6 +4,7 @@ from typing import Callable
 from time import perf_counter
 
 import ase
+import numpy as np
 import networkx as nx
 from ase.optimize import BFGS
 from scipy.spatial.transform import Rotation
@@ -27,9 +28,15 @@ def evaluate_inversion(function: Callable[[nx.DiGraph], ase.Atoms], starting: as
     Returns:
         Performance information:
             - `is_isometric`: Whether the graphs match
+            - `adj_difference`: Sum of differences in adjacency matrix of water clusters
+            - `unrelaxed_energy`: Energy before relaxation with TTM, if relaxation is performed
+            - `new_energy`: Energy after relaxation
             - `energy_diff`: The difference in the energy between the initial and reconstructed clusters
             - `rmsd`: Root mean squared deviation between the initial and reconstructed geometries
-            - `run_time`: How long it took to run the inversion
+            - `invert_time`: How long it too to invert
+            - `relax_time`: Time to perform the relaxation
+            - `total_time`: How long it took to run the inversion and relaxation
+
     """
 
     # Make a directed graph from starting geometry
@@ -38,29 +45,43 @@ def evaluate_inversion(function: Callable[[nx.DiGraph], ase.Atoms], starting: as
     starting_energy = _ttm.get_potential_energy(starting)
 
     # Run the inversion function
+    output = {}
     start_time = perf_counter()
     new_geom = function(starting_graph_coarse)
+    run_time = perf_counter() - start_time
+    output['invert_time'] = run_time
 
     # If requested, relax the structure
+    start_time = perf_counter()
     if relax_ttm:
+        # Measure the energy pre-relaxation
+        output['unrelaxed_energy'] = _ttm.get_potential_energy(new_geom)
+
         # Run the relaxation
         new_geom.set_calculator(_ttm)
         dyn = BFGS(new_geom, logfile=os.devnull)
-        dyn.run(fmax=0.05)
+        dyn.run(fmax=0.05, steps=1024)
+        new_geom.set_calculator()  # Clear it
     run_time = perf_counter() - start_time
+    output['relax_time'] = run_time
+    output['total_time'] = output['relax_time'] + output['invert_time']
 
     # Get the energy of the structure
     new_energy = _ttm.get_potential_energy(new_geom)
+    output['final_energy'] = new_energy
+    output['energy_diff'] = new_energy - starting_energy
 
     # Get the graph from the new structure
     new_graph = create_graph(new_geom)
+    output['is_isometric'] = nx.is_isomorphic(new_graph, starting_graph)
+
+    new_graph_coarse = coarsen_graph(new_graph)
+    new_adj = nx.to_numpy_array(new_graph_coarse.to_undirected(), nodelist=sorted(new_graph_coarse.nodes()), weight='label_id', dtype=int)
+    old_adj = nx.to_numpy_array(starting_graph_coarse.to_undirected(), nodelist=sorted(starting_graph_coarse.nodes()), weight='label_id', dtype=int)
+    output['adj_difference'] = int((new_adj != old_adj).sum())
 
     # Compute the RMSD
-    _, rmsd = Rotation.align_vectors(starting.positions, new_geom.positions)
+    _, rmsd = Rotation.align_vectors(starting.positions, new_geom.positions)[:2]
+    output['rmsd'] = rmsd
 
-    return {
-        'is_isometric': nx.is_isomorphic(new_graph, starting_graph),
-        'energy_diff': new_energy - starting_energy,
-        'rmsd': rmsd,
-        'run_time': run_time
-    }
+    return output
