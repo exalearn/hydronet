@@ -2,7 +2,7 @@ from ase.calculators.calculator import Calculator, all_changes
 from ase.optimize.optimize import Optimizer
 import scipy.optimize as opt
 from ttm.flib import ttm_from_f2py
-
+import numpy as np
 from ttm import TTM
 
 class TTMCalculator(Calculator):

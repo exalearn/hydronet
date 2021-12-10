@@ -135,8 +135,8 @@ def coarsen_graph(in_graph: nx.Graph) -> nx.DiGraph:
     # Assign bonds to each water molecule
     for (d, w_d), (a, w_a) in bonds:
         # Add the edges
-        output.add_edge(d, a, label='donate', weight=w_d+w_a)
-        output.add_edge(a, d, label='accept', weight=w_d+w_a)
+        output.add_edge(d, a, label='donate', label_id=1, weight=w_d+w_a)
+        output.add_edge(a, d, label='accept', label_id=2, weight=w_d+w_a)
 
     return output
 
