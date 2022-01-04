@@ -20,6 +20,7 @@ def parse_records(example_proto):
         'atom': tf.io.VarLenFeature(tf.int64),
         'bond': tf.io.VarLenFeature(tf.int64),
     }
+
     return tf.io.parse_example(example_proto, features)
 
 
@@ -30,6 +31,7 @@ def prepare_for_batching(dataset):
     for c in ['atom', 'bond', 'connectivity']:
         expanded = tf.expand_dims(dataset[c].values, axis=0, name=f'expand_{c}')
         dataset[c] = tf.RaggedTensor.from_tensor(expanded)
+        dataset[c] = dataset[c].flat_values
     return dataset
 
 
@@ -41,10 +43,6 @@ def combine_graphs(batch):
     mol_id = tf.range(batch_size, name='mol_inds')
     batch['node_graph_indices'] = repeat(mol_id, batch['n_atoms'], axis=0)
     batch['bond_graph_indices'] = repeat(mol_id, batch['n_bonds'], axis=0)
-
-    # Reshape the bond, connectivity, and node lists
-    for c in ['atom', 'bond', 'connectivity']:
-        batch[c] = batch[c].flat_values
 
     # Reshape the connectivity matrix to (None, 2)
     batch['connectivity'] = tf.reshape(batch['connectivity'], (-1, 2))
