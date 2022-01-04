@@ -26,6 +26,7 @@ _energy_per_water = -10.520100056495238
 if __name__ == "__main__":
     # Parse the arguments
     arg_parser = ArgumentParser()
+    arg_parser.add_argument('--data-dir', required=True, help='Directory in which data is stored', type=str)
     arg_parser.add_argument('--network-choice', default='coarse', choices=['atomic', 'coarse'], 
                             help='Whether to use the coarsened or atomic graph')
     arg_parser.add_argument('--batch-size', '-b', default=256, help='Batch size', type=int)
@@ -54,9 +55,9 @@ if __name__ == "__main__":
     host_info = get_platform_info()
     
     # Hard-coded paths for data and model
-    train_path = os.path.join('..', '..', 'data', 'output', f'{args.network_choice}_train.proto')
-    valid_path = os.path.join('..', '..', 'data', 'output', f'{args.network_choice}_valid.proto')
-    test_path = os.path.join('..', '..', 'data', 'output', f'{args.network_choice}_test.proto')
+    train_path = os.path.join(args.data_dir, f'{args.network_choice}_train.proto')
+    valid_path = os.path.join(args.data_dir, f'{args.network_choice}_valid.proto')
+    test_path = os.path.join(args.data_dir, f'{args.network_choice}_test.proto')
 
     # Open an experiment directory
     run_hash = hashlib.sha256(json.dumps(run_params).encode()).hexdigest()[:6]
