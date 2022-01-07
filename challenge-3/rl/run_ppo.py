@@ -20,6 +20,7 @@ sys.path.insert(0,'/people/pope044/Exalearn/hydronet')
 
 from hydronet.rl.tf.networks import GCPNActorNetwork, GCPNCriticNetwork
 from hydronet.rl.tf.env import SimpleEnvironment
+from hydronet.rl.tf.util import DriverLogger
 from hydronet.rl.rewards.mpnn import MPNNReward
 from hydronet.rl.rewards.geom import CyclesReward
 from hydronet.mpnn.layers import custom_objects
@@ -197,7 +198,8 @@ if __name__ == "__main__":
         batch_size=1,
         max_length=args.driver_buffer,
     )
-    driver = DynamicEpisodeDriver(tf_env, tf_agent.collect_policy, [buffer.add_batch], num_episodes=8)
+    log_diver = DriverLogger(out_dir / 'training-structures.json')
+    driver = DynamicEpisodeDriver(tf_env, tf_agent.collect_policy, [buffer.add_batch, log_diver], num_episodes=8)
     
     # Perform an initial test
     agent_return = compute_avg_return(tf_env, tf_agent.collect_policy, 32)
@@ -253,4 +255,3 @@ if __name__ == "__main__":
     # Do the post-processing
     rl_traj = get_trajectories(tf_env, tf_agent.collect_policy, eng_reward, args.post_episode_count)
     rl_traj.to_pickle(out_dir / 'final_trajs.pkl')
-    
