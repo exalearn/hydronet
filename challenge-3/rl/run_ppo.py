@@ -52,6 +52,9 @@ def make_reward(args):
     elif args.reward == 'cycles':
         reward = CyclesReward(weight=False)
         return reward, False
+    elif args.reward == 'aspl':
+        reward = ASPLReward()
+        return reward, False
     else:
         raise ValueError(f'Undefined reward function: {args.reward}')
         
@@ -108,7 +111,7 @@ if __name__ == "__main__":
     
     #   Group 1: Things related to the environment
     group = arg_parser.add_argument_group('Environment Options', 'Options related to the water cluster environment, such as reward structure')
-    group.add_argument('--reward', choices=['mpnn_last', 'mpnn', 'cycles'],
+    group.add_argument('--reward', choices=['mpnn_last', 'mpnn', 'cycles', 'aspl'],
                        default='mpnn_last', help='Name of the reward function to use. Rewards are defined in code')
     group.add_argument('--mpnn-path', default=str(_mpnn_path), help='Path to the MPNN used for evaluating energy, if needed')
     group.add_argument('--max-size', default=10, help='Maximum size of the water cluster.', type=int)
