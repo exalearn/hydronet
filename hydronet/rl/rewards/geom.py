@@ -34,4 +34,4 @@ class ASPLReward(RewardFunction):
     def _call(self, graph: nx.Graph) -> float:
         '''Higher value = more linear'''
         aspl = nx.average_shortest_path_length(graph.to_undirected())
-        return aspl
+        return -1*aspl

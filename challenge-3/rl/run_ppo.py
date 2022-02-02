@@ -22,7 +22,7 @@ from hydronet.rl.tf.networks import GCPNActorNetwork, GCPNCriticNetwork
 from hydronet.rl.tf.env import SimpleEnvironment
 from hydronet.rl.tf.util import DriverLogger
 from hydronet.rl.rewards.mpnn import MPNNReward
-from hydronet.rl.rewards.geom import CyclesReward
+from hydronet.rl.rewards.geom import CyclesReward, ASPLReward
 from hydronet.mpnn.layers import custom_objects
 from hydronet.utils import get_platform_info
 
@@ -49,6 +49,11 @@ def make_reward(args):
         model = tf.keras.models.load_model(args.mpnn_path, custom_objects=custom_objects)
         reward = MPNNReward(model, per_water=True)
         return reward, False
+    elif args.reward == 'mpnn_combo':
+        model = tf.keras.models.load_model(args.mpnn_path, custom_objects=custom_objects)
+        reward = CyclesReward()
+        second_reward = MPNNReward(model, per_water=True)
+        return reward, second_reward, False 
     elif args.reward == 'cycles':
         reward = CyclesReward(weight=False)
         return reward, False
@@ -111,7 +116,7 @@ if __name__ == "__main__":
     
     #   Group 1: Things related to the environment
     group = arg_parser.add_argument_group('Environment Options', 'Options related to the water cluster environment, such as reward structure')
-    group.add_argument('--reward', choices=['mpnn_last', 'mpnn', 'cycles', 'aspl'],
+    group.add_argument('--reward', choices=['mpnn_last', 'mpnn', 'mpnn_combo', 'cycles', 'aspl'],
                        default='mpnn_last', help='Name of the reward function to use. Rewards are defined in code')
     group.add_argument('--mpnn-path', default=str(_mpnn_path), help='Path to the MPNN used for evaluating energy, if needed')
     group.add_argument('--max-size', default=10, help='Maximum size of the water cluster.', type=int)
@@ -162,8 +167,12 @@ if __name__ == "__main__":
         json.dump(host_info, fp)
     
     # Make the environment
-    reward, only_last = make_reward(args)
-    env = SimpleEnvironment(maximum_size=args.max_size, reward=reward, only_last=only_last)
+    if 'combo' in args.reward:
+        reward, second_reward, only_last = make_reward(args)
+    else:
+        reward, only_last = make_reward(args)
+        second_reward = None
+    env = SimpleEnvironment(maximum_size=args.max_size, reward=reward, second_reward=second_reward, only_last=only_last)
     tf_env = TFPyEnvironment(env)
     
     # Make a reward for MPNN energy

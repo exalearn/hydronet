@@ -36,7 +36,8 @@ class SimpleEnvironment(PyEnvironment):
 
     # TODO (wardlt): Harmonize the terms. Make them consistent as graph terms (e.g., source_id, destination_id)
 
-    def __init__(self, reward: RewardFunction = None, maximum_size: int = 10,
+    def __init__(self, reward: RewardFunction = None, second_reward: RewardFunction = None,
+                 maximum_size: int = 10,
                  init_cluster: nx.DiGraph = None, discount_factor: float = 1.0,
                  only_last: bool = False):
         """
@@ -66,7 +67,10 @@ class SimpleEnvironment(PyEnvironment):
             init_cluster.add_edge(1, 0, label='accept')
         if reward is None:
             reward = BondCountReward()
+        if second_reward is None:
+            second_reward = reward
         self.reward_fn = reward
+        self.second_reward_fn = second_reward
         self.init_cluster = init_cluster
         self.maximum_size = maximum_size
         self.discount_factor = discount_factor
@@ -181,7 +185,7 @@ class SimpleEnvironment(PyEnvironment):
             self._episode_ended = True
             return ts.termination(
                 self.get_state_as_tensors(),
-                reward=self.reward_fn(_last_state) if self.only_last else reward
+                reward=self.second_reward_fn(_last_state) #if self.only_last else reward
             )
         else:
             return ts.transition(
