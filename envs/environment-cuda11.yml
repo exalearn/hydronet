@@ -1,17 +1,17 @@
-# Environment that uses CPU version of TF and PyTorch
+# Environment that uses a locally-installed CUDA 11.x library
 name: hydronet
 channels:
   - defaults
   - conda-forge
 dependencies:
-  - python==3.8.*
+  - python==3.*
   - ase==3.19.*
   - networkx==2.4.*
   - pandas==0.25.*
   - scikit-learn==0.22.*
   - mongodb==4.*
-  - pydantic
   - pymongo
+  - pydantic
   - tqdm
   - tabulate
   - jupyterlab
@@ -19,11 +19,11 @@ dependencies:
   - pytest
   - pip
   - pip:
-      - torch==1.9.0+cpu
-      - intel-tensorflow==2.4.*
+      - tensorflow==2.4
+      - torch==1.9.0+cu111
       - globus-cli
       - schnetpack
       - tf-agents==0.8.*
       - gym
-      - -e .  # The graphsage libraries in development mode
+      - -e ..  # The graphsage libraries in development mode
       - -f https://download.pytorch.org/whl/torch_stable.html
