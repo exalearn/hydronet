@@ -1,0 +1,290 @@
+"""Tools related to storing energies in a database"""
+import hashlib
+import random
+from enum import Enum
+import pickle as pkl
+from pathlib import Path
+from datetime import datetime
+from typing import Optional, Iterable, Union
+
+import ase
+import networkx as nx
+import numpy as np
+import tensorflow as tf
+from ase.calculators.singlepoint import SinglePointCalculator
+from pymongo import MongoClient
+from pymongo.collection import Collection
+from pydantic import BaseModel, Field
+from pymongo.cursor import Cursor
+from pymongo.errors import DuplicateKeyError
+
+from hydronet.data import graph_from_dict
+from hydronet.importing import create_graph, coarsen_graph, create_inputs_from_nx, make_tfrecord
+
+
+class EnergyLevels(str, Enum):
+    """Different levels of energy"""
+
+    TTM = 'ttm'
+
+
+class HydroNetRecord(BaseModel):
+    """Record holding data about a single water cluster."""
+
+    # Geometry information
+    n_waters: int = Field(..., description='Number of water molecules in this cluster')
+    coords_: bytes = Field(..., description='XYZ coordinates of water and clusters in OHHOHH order. Stored as a binary string')
+
+    # Energy of the cluster
+    energy: float = Field(..., description='TTM-computed energy of the molecule')
+
+    # Information about the graph forms
+    coarse_bond_: bytes = Field(..., description='Bond types for the coarse graph')
+    coarse_connectivity_: bytes = Field(..., description='Connectivity for the coarse graph')
+    atomic_bond_: bytes = Field(..., description='Bond types for the coarse graph')
+    atomic_connectivity_: bytes = Field(..., description='Connectivity for the coarse graph')
+
+    # Useful tools for the database
+    position: float = Field(default_factory=lambda: random.random(), description='Random number used to assign data to training/validation/test sets')
+    coord_hash: Optional[str] = Field(None, min_length=64, max_length=64,
+                                      description='Hash of the coordinates. Used to ensure structures are not exact duplicates')
+
+    # Useful tools for provenance
+    create_date: datetime = Field(default_factory=datetime.now, description='Time record was created or updated')
+    source: Optional[str] = Field(None, description='Where this entry came from')
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        sha = hashlib.sha256()
+        sha.update(self.coords_)
+        self.coord_hash = sha.hexdigest()[:64]
+
+    def __repr__(self):
+        return f'n_waters={self.n_waters} energy={self.energy}'
+
+    def __str__(self):
+        return f'n_waters={self.n_waters} energy={self.energy}'
+
+    @property
+    def coords(self) -> np.ndarray:
+        """Copy of the XYZ coordinate array"""
+        return pkl.loads(self.coords_)
+
+    @property
+    def z(self) -> np.ndarray:
+        """Atomic numbers of each atom"""
+        return np.array([8, 1, 1] * self.n_waters, dtype=np.int64)
+
+    @property
+    def atom(self) -> np.ndarray:
+        """Types of each atom in the array"""
+        return np.array([0, 1, 1] * self.n_waters, dtype=np.int64)
+
+    @property
+    def atoms(self) -> ase.Atoms:
+        # Make the atoms object
+        atoms = ase.Atoms(positions=self.coords, numbers=self.z)
+
+        # Attach the energy value
+        calc = SinglePointCalculator(atoms, energy=self.energy)
+        atoms.set_calculator(calc)
+
+        return atoms
+
+    @property
+    def coarse_dict(self) -> dict:
+        """Dictionary representation of the coarse graph"""
+        conn = pkl.loads(self.coarse_connectivity_)
+        return {
+            'n_waters': self.n_waters,
+            'n_atoms': self.n_waters,
+            'n_bonds': len(conn),
+            'atom': np.zeros((self.n_waters,), dtype=np.int64),
+            'bond': pkl.loads(self.coarse_bond_),
+            'connectivity': conn,
+            'energy': self.energy
+        }
+
+    @property
+    def coarse_nx(self) -> nx.DiGraph:
+        """NetworkX version of the coarse graph"""
+        return graph_from_dict(self.coarse_dict)
+
+    @property
+    def atomic_dict(self) -> dict:
+        """Dictionary representation of the atomic graph"""
+        conn = pkl.loads(self.atomic_connectivity_)
+        return {
+            'n_waters': self.n_waters,
+            'n_atoms': self.n_waters * 3,
+            'n_bonds': len(conn),
+            'atom': self.atom,
+            'bond': pkl.loads(self.atomic_bond_),
+            'connectivity': conn,
+            'energy': self.energy
+        }
+
+    @property
+    def atomic_nx(self) -> nx.Graph:
+        """NetworkX version of the atomic graph"""
+        return graph_from_dict(self.atomic_dict)
+
+    @classmethod
+    def from_atoms(cls, atoms: ase.Atoms, energy: Optional[float] = None) -> 'HydroNetRecord':
+        """Create a new database entry from a water
+
+        Stores the connectivity information as well
+
+        Args:
+            atoms: 3D geometry of the water cluster
+            energy: Energy of the structure, computed with TTM
+        Returns:
+            Database entry for this cluster, complete with the graph data
+        """
+
+        # If energy is not provided, get it from the structure
+        if energy is None:
+            energy = atoms.get_potential_energy()
+
+        # Extract the number of waters and the coordinates
+        coords_ = atoms.get_positions().dumps()
+        n_waters = len(atoms) // 3
+
+        # Get an atomic and coarse graph
+        atomic_graph = create_graph(atoms)
+        coarse_graph = coarsen_graph(atomic_graph)
+
+        # Store the bond and connectivity information as numpy arrays
+        atomic_dict = create_inputs_from_nx(atomic_graph)
+        atomic_bond_ = np.array(atomic_dict["bond"]).dumps()
+        _atomic_conn = np.array(atomic_dict["connectivity"]).dumps()
+
+        coarse_dict = create_inputs_from_nx(coarse_graph)
+        coarse_bond_ = np.array(coarse_dict["bond"]).dumps()
+        _coarse_conn = np.array(coarse_dict["connectivity"]).dumps()
+
+        # Initialize the object
+        return cls(
+            n_waters=n_waters, coords_=coords_,
+            energy=energy,
+            atomic_bond_=atomic_bond_, atomic_connectivity_=_atomic_conn,
+            coarse_bond_=coarse_bond_, coarse_connectivity_=_coarse_conn,
+        )
+
+
+class HydroNetDB:
+    """Wrapper for a MongoDB holding properties of water clusters"""
+
+    def __init__(self, collection: Collection):
+        """
+        Args:
+            collection: Collection of molecule property documents
+        """
+        self.collection = collection
+
+    @classmethod
+    def from_connection_info(cls, hostname: str = "localhost", port: Optional[int] = None,
+                             database: str = "hydronet", collection: str = "clusters", **kwargs) -> 'HydroNetDB':
+        """Connect to MongoDB and create the database wrapper
+
+        Args:
+            hostname: Host of the MongoDB
+            port: Port of the service
+            database: Name of the database holding desired data
+            collection: Name of the collection holding the water cluster data
+        """
+        client = MongoClient(hostname, port=port, **kwargs)
+        db = client.get_database(database)
+        return cls(db.get_collection(collection))
+
+    def initialize_index(self):
+        """Prepare a new collection.
+
+        Makes the "coord_hash" a unique key
+        """
+        return self.collection.create_index('coord_hash', unique=True)
+
+    def add_cluster(self, atoms: ase.Atoms, energy: Optional[float] = None, upsert: bool = False, source: Optional[str] = None) -> bool:
+        """Add a cluster to the database
+
+        Args:
+            atoms: Atomic cluster of interest
+            energy: Energy of cluster in kcal/mol. If not provided, will be extracted from ``atoms.get_potential_energy()``
+            upsert: Whether to update an existing record
+            source: Source for the structure
+        Returns:
+            Whether the database was updated
+        """
+        record = HydroNetRecord.from_atoms(atoms, energy)
+        record.source = source
+
+        if upsert:
+            key = record.coord_hash
+            self.collection.update_one({'coord_hash': key}, {'$set': record.dict()}, upsert=True)
+            return True
+        else:
+            try:
+                self.collection.insert_one(record.dict())
+                return True
+            except DuplicateKeyError:
+                return False
+
+    def shuffle(self):
+        """Assign a new order to the atoms"""
+        self.collection.update_many({}, [{'$set': {'position': {'$rand': {}}}}])
+
+    @staticmethod
+    def iterate_as_records(cursor: Cursor) -> Iterable[HydroNetRecord]:
+        """Iterate through a series of records as HydroNet records
+
+        Args:
+            cursor: Cursor that will iterate over the database
+        Yields:
+            Records in the order presented
+        """
+
+        for data in cursor:
+            yield HydroNetRecord.parse_obj(data)
+
+    def write_to_tf_records(self, cursor: Cursor, path: Union[str, Path], coarse: bool = True):
+        """Write results of a query to TF protobuf format
+
+        Args:
+            cursor: Results of a query
+            path: Path to the TF record object
+            coarse: Whether to write the coarse or atomic graph
+        """
+
+        with tf.io.TFRecordWriter(str(path)) as out:
+            for record in self.iterate_as_records(cursor):
+                dict_format = record.coarse_dict if coarse else record.atomic_dict
+                out.write(make_tfrecord(dict_format))
+
+    def write_datasets(self, directory: Union[str, Path], coarse: bool = True, val_split: float = 0.1, test_split = 0.1):
+        """Write the training, test, and validation sets to a directory
+
+        Args:
+            directory: Path to an output directory
+            coarse: Whether to write the coarse or atomic graphs
+            val_split: Fraction of data to use for the validation set
+            test_split: Fraction of the data to use for the test set
+        """
+
+        assert val_split + test_split < 1, 'Training and test sets should add to less than 1'
+
+        # Make the directory, if need be
+        output_dir = Path(directory)
+        output_dir.mkdir(exist_ok=True, parents=True)
+
+        # Save the training set
+        cursor = self.collection.find({'$and': [{'position': {'$gt': val_split}},
+                                                {'position': {'$lt': 1 - test_split}}]}).sort('position')
+        self.write_to_tf_records(cursor, output_dir / 'training.proto', coarse=coarse)
+
+        # Save the validation set
+        cursor = self.collection.find({'position': {'$lt': val_split}}).sort('position')
+        self.write_to_tf_records(cursor, output_dir / 'validation.proto', coarse=coarse)
+
+        # Save the test set
+        cursor = self.collection.find({'position': {'$gt': 1 - test_split}}).sort('position')
+        self.write_to_tf_records(cursor, output_dir / 'test.proto', coarse=coarse)
