@@ -1,5 +1,6 @@
 """Environments for TF-agents"""
-from typing import Dict, Any, List, Tuple
+from random import choice
+from typing import Dict, Any, List, Tuple, Optional, Sequence
 import logging
 
 import numpy as np
@@ -35,10 +36,10 @@ class SimpleEnvironment(PyEnvironment):
     """
 
     # TODO (wardlt): Harmonize the terms. Make them consistent as graph terms (e.g., source_id, destination_id)
-
     def __init__(self, reward: RewardFunction = None, second_reward: RewardFunction = None,
                  maximum_size: int = 10,
-                 init_cluster: nx.DiGraph = None, discount_factor: float = 1.0,
+                 init_cluster: Optional[nx.DiGraph] = None,
+                 discount_factor: float = 1.0,
                  only_last: bool = False):
         """
 
@@ -49,7 +50,7 @@ class SimpleEnvironment(PyEnvironment):
         maximum_size
             Maximum allowed size of the graph
         init_cluster
-            Initial graph to start with
+            Initial graph to start with.
         discount_factor
             Discount factor for the rewards
         only_last
@@ -257,3 +258,55 @@ class SimpleEnvironment(PyEnvironment):
         for d, a in self.get_valid_moves():
             output[d, a] = 1
         return output
+
+
+class IncrementalEnvironment(SimpleEnvironment):
+    """A version of the environment that starts from a different structure each time
+
+    Instead of growing the cluster to a maximum size, we just grow it until it increases in size by a certain amount"""
+
+    def __init__(self,
+                 reward: RewardFunction = None,
+                 second_reward: RewardFunction = None,
+                 maximum_size: int = 10,
+                 size_increment: int = 2,
+                 init_clusters: Sequence[nx.DiGraph] = (),
+                 discount_factor: float = 1.0,
+                 only_last: bool = False
+                 ):
+        """
+        Parameters
+        ----------
+        reward
+            Reward function used to score graphs. (Default: Bond count)
+        maximum_size
+            Maximum allowed size of the graph
+        init_clusters
+            Potential initial graph to start with.
+        discount_factor
+            Discount factor for the rewards
+        only_last
+            Whether to only score a reward for the last step. The reward here is the score of the graph before
+            the episode terminated (i.e., the last step at the maximum size because the episode terminates
+            when we exceed the target size)
+        """
+        assert len(init_clusters) > 0, "You must specify at least one graph"
+        assert size_increment > 0, "You must "
+        init_cluster = init_clusters[0]
+        self.init_clusters = init_clusters
+        self._maximum_size = maximum_size
+        self.size_increment = size_increment
+        super().__init__(
+            reward=reward,
+            second_reward=second_reward,
+            maximum_size=maximum_size,
+            init_cluster=init_cluster,
+            discount_factor=discount_factor,
+            only_last=only_last
+        )
+
+    def _reset(self) -> ts.TimeStep:
+        # Pick a new starting molecule
+        self.init_cluster = choice(self.init_clusters)
+        self.maximum_size = len(self.init_cluster) + self.size_increment
+        return super()._reset()

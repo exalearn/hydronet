@@ -7,10 +7,11 @@ See https://exalearn.github.io/hydronet/ for more details.
 
 ## Installation
 
-Install the environment needed for these notebooks with `conda env create --file environment.yml --force`
+Install the environment needed for these notebooks with `conda env create --file environment.yml --force`.
+Versions compiled for specific hardware (e.g., systems with modern GPUs) are available in [envs](./envs).
 
 The [`ttm`](./ttm) directory contains code needed to compute the energy of water clusters, 
-which is needed for Challenge 3. 
+which is needed for Challenge 3. See the installation directions in that directory.
 
 ## Quickstart
 

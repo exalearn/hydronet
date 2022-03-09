@@ -2,20 +2,21 @@
 
 from typing import Dict, Union
 
+import ase
 from ase import data
 import tensorflow as tf
 import networkx as nx
 import numpy as np
 
 
-def infer_water_cluster_bonds(atoms):
+def infer_water_cluster_bonds(atoms: ase.Atoms):
     """
     Infers the covalent and hydrogen bonds between oxygen and hydrogen atoms in a water cluster.
 
     Definition of a hydrogen bond obtained from https://aip.scitation.org/doi/10.1063/1.2742385
 
     Args:
-        atoms (ase.Atoms): ASE atoms structure of the water cluster. Atoms list must be ordered
+        atoms: ASE atoms structure of the water cluster. Atoms list must be ordered
             such that the two covalently bound hydrogens directly follow their oxygen.
     Returns:
         cov_bonds ([(str, str, 'covalent')]): List of all covalent bonds
@@ -281,7 +282,7 @@ def make_tfrecord(cluster: dict):
     Args:
         cluster (dict): Dictionary representation of water cluster network
     Returns:
-        (bytes) Water cluster as a sesrialized string
+        (bytes) Water cluster as a serialized string
     """
 
     # Convert the data to TF features

@@ -1,4 +1,5 @@
 """Test the OpenAI Gym environment"""
+import networkx as nx
 from tf_agents.environments import utils
 from tf_agents.trajectories import time_step as ts
 from tf_agents.specs import array_spec
@@ -7,7 +8,7 @@ from pytest import fixture
 import numpy as np
 
 from hydronet.data import graph_is_valid
-from hydronet.rl.tf.env import SimpleEnvironment
+from hydronet.rl.tf.env import SimpleEnvironment, IncrementalEnvironment
 
 
 @fixture
@@ -134,3 +135,22 @@ def test_valid_moves(env: SimpleEnvironment):
 
 def test_with_tf_agents(env: SimpleEnvironment):
     utils.validate_py_environment(env, 5)
+
+
+def test_random_start(triangle_cluster: nx.DiGraph, env: SimpleEnvironment):
+    """Make an environment where we pick a different starting structure each episode"""
+
+    rand_env = IncrementalEnvironment(env.reward_fn, maximum_size=10, size_increment=2,
+                                      init_clusters=[env.get_state(), triangle_cluster])
+
+    # Pick one at random
+    rand_env.reset()
+    start_state = rand_env.get_state()
+    assert len(start_state) + 2 == rand_env.maximum_size
+
+    # Pick a different structure a few times, makes sure we get both the "triangle" and "dimer"
+    obs = set()
+    for _ in range(40):
+        rand_env.reset()
+        obs.add(len(rand_env.get_state()))
+    assert obs == {2, 3}
