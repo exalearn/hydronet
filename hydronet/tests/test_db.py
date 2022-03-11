@@ -41,6 +41,9 @@ def test_create(atoms):
     record = HydroNetRecord.from_atoms(atoms)
     assert np.isclose(record.coords, atoms.get_positions()).all()
     assert record.energy == -1
+    
+    # Make sure it counted the correct number of rings
+    assert record.cycle_hash == "1T0Q0P0H"
 
     # Make sure repeating the creation gives the same hash
     record2 = HydroNetRecord.from_atoms(atoms, -2)

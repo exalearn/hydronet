@@ -4,7 +4,7 @@ from tf_agents.drivers.dynamic_step_driver import DynamicStepDriver
 from tf_agents.policies import ActorPolicy
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
-from tf_agents.specs.tensor_spec import add_outer_dim
+from tf_agents.specs.tensor_spec import add_outer_dims_nest
 import tensorflow as tf
 
 from pytest import fixture
@@ -66,8 +66,8 @@ def example_batch() -> NestedTensor:
 
 def test_random(env, tf_env):
     policy = ConstrainedRandomPolicy(
-        time_step_spec=add_outer_dim(tf_env.time_step_spec(), tf_env.batch_size),
-        action_spec=add_outer_dim(tf_env.action_spec(), tf_env.batch_size)
+        time_step_spec=tf_env.time_step_spec(),
+        action_spec=tf_env.action_spec()
     )
 
     # Make an initial step

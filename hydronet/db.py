@@ -19,17 +19,15 @@ from pymongo.cursor import Cursor
 from pymongo.errors import DuplicateKeyError
 
 from hydronet.data import graph_from_dict
+from hydronet.descriptors import count_rings
 from hydronet.importing import create_graph, coarsen_graph, create_inputs_from_nx, make_tfrecord
 
 
-class EnergyLevels(str, Enum):
-    """Different levels of energy"""
-
-    TTM = 'ttm'
-
-
 class HydroNetRecord(BaseModel):
-    """Record holding data about a single water cluster."""
+    """Record holding data about a single water cluster.
+    
+    For simplicity in editing 
+    """
 
     # Geometry information
     n_waters: int = Field(..., description='Number of water molecules in this cluster')
@@ -38,11 +36,14 @@ class HydroNetRecord(BaseModel):
     # Energy of the cluster
     energy: float = Field(..., description='TTM-computed energy of the molecule')
 
-    # Information about the graph forms
+    # Information used to reconstruct the graph form of the cluster
     coarse_bond_: bytes = Field(..., description='Bond types for the coarse graph')
     coarse_connectivity_: bytes = Field(..., description='Connectivity for the coarse graph')
     atomic_bond_: bytes = Field(..., description='Bond types for the coarse graph')
     atomic_connectivity_: bytes = Field(..., description='Connectivity for the coarse graph')
+    
+    # Details about the graph structure
+    cycle_hash: str = Field(..., description='List of the number of cycles of between 3 and 6, written as a string.')
 
     # Useful tools for the database
     position: float = Field(default_factory=lambda: random.random(), description='Random number used to assign data to training/validation/test sets')
@@ -162,6 +163,12 @@ class HydroNetRecord(BaseModel):
         coarse_dict = create_inputs_from_nx(coarse_graph)
         coarse_bond_ = np.array(coarse_dict["bond"]).dumps()
         _coarse_conn = np.array(coarse_dict["connectivity"]).dumps()
+        
+        # Count the number of cycles
+        cycle_hash = "".join(
+            f"{count_rings(coarse_graph, i)}{l}"
+            for i, l in zip([3, 4, 5, 6], ['T', 'Q', 'P', 'H'])
+        )
 
         # Initialize the object
         return cls(
@@ -169,6 +176,7 @@ class HydroNetRecord(BaseModel):
             energy=energy,
             atomic_bond_=atomic_bond_, atomic_connectivity_=_atomic_conn,
             coarse_bond_=coarse_bond_, coarse_connectivity_=_coarse_conn,
+            cycle_hash=cycle_hash
         )
 
 
@@ -260,7 +268,7 @@ class HydroNetDB:
                 dict_format = record.coarse_dict if coarse else record.atomic_dict
                 out.write(make_tfrecord(dict_format))
 
-    def write_datasets(self, directory: Union[str, Path], coarse: bool = True, val_split: float = 0.1, test_split = 0.1):
+    def write_datasets(self, directory: Union[str, Path], coarse: bool = True, val_split: float = 0.1, test_split: float = 0.1):
         """Write the training, test, and validation sets to a directory
 
         Args:
