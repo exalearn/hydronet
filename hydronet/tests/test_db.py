@@ -50,6 +50,12 @@ def test_create(atoms):
     assert record2.energy == -2
     assert record.coord_hash == record2.coord_hash
     assert record.position != record2.position
+    
+    # Test JSON parsing
+    json_dump = record.json()
+    record3 = HydroNetRecord.parse_raw(json_dump)
+    assert isinstance(record3.coords_, bytes)
+    assert np.isclose(record3.coords, record.coords).all()
 
     # Make the atoms object
     new_atoms = record.atoms

@@ -1,6 +1,7 @@
 """Tools related to storing energies in a database"""
 import hashlib
 import random
+import base64
 from enum import Enum
 import pickle as pkl
 from pathlib import Path
@@ -14,7 +15,7 @@ import tensorflow as tf
 from ase.calculators.singlepoint import SinglePointCalculator
 from pymongo import MongoClient
 from pymongo.collection import Collection
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from pymongo.cursor import Cursor
 from pymongo.errors import DuplicateKeyError
 
@@ -26,21 +27,21 @@ from hydronet.importing import create_graph, coarsen_graph, create_inputs_from_n
 class HydroNetRecord(BaseModel):
     """Record holding data about a single water cluster.
     
-    For simplicity in editing 
+    For simplicity in updated the database, we use a 
     """
 
     # Geometry information
     n_waters: int = Field(..., description='Number of water molecules in this cluster')
-    coords_: bytes = Field(..., description='XYZ coordinates of water and clusters in OHHOHH order. Stored as a binary string')
+    coords_: bytes = Field(None, description='XYZ coordinates of water and clusters in OHHOHH order. Stored as a binary string')
 
     # Energy of the cluster
     energy: float = Field(..., description='TTM-computed energy of the molecule')
 
     # Information used to reconstruct the graph form of the cluster
-    coarse_bond_: bytes = Field(..., description='Bond types for the coarse graph')
-    coarse_connectivity_: bytes = Field(..., description='Connectivity for the coarse graph')
-    atomic_bond_: bytes = Field(..., description='Bond types for the coarse graph')
-    atomic_connectivity_: bytes = Field(..., description='Connectivity for the coarse graph')
+    coarse_bond_: bytes = Field(None, description='Bond types for the coarse graph')
+    coarse_connectivity_: bytes = Field(None, description='Connectivity for the coarse graph')
+    atomic_bond_: bytes = Field(None, description='Bond types for the coarse graph')
+    atomic_connectivity_: bytes = Field(None, description='Connectivity for the coarse graph')
     
     # Details about the graph structure
     cycle_hash: str = Field(..., description='List of the number of cycles of between 3 and 6, written as a string.')
@@ -53,12 +54,24 @@ class HydroNetRecord(BaseModel):
     # Useful tools for provenance
     create_date: datetime = Field(default_factory=datetime.now, description='Time record was created or updated')
     source: Optional[str] = Field(None, description='Where this entry came from')
+    
+    class Config:
+        json_encoders = {bytes: lambda x: '_base64' + base64.b64encode(x).decode('ascii')}
+        
+    @validator('coords_', 'coarse_bond_', 'coarse_connectivity_', 'atomic_bond_', 'atomic_connectivity_')
+    def _debase64_encode(v):
+        if v[:7] == b'_base64': # Attempt to decode base64
+            return base64.b64decode(v[7:])
+        return v
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        sha = hashlib.sha256()
-        sha.update(self.coords_)
-        self.coord_hash = sha.hexdigest()[:64]
+        if 'coords_' in kwargs:
+            sha = hashlib.sha256()
+            sha.update(self.coords_)
+            self.coord_hash = sha.hexdigest()[:64]
+        elif 'coord_hash' not in kwargs:
+            raise ValueError('You must either provide coords_ or coord_hash')
 
     def __repr__(self):
         return f'n_waters={self.n_waters} energy={self.energy}'
@@ -263,6 +276,10 @@ class HydroNetDB:
             coarse: Whether to write the coarse or atomic graph
         """
 
+        options = tf.io.TFRecordOptions(
+            compression_type="ZLIB",
+            compression_level=5,
+        )
         with tf.io.TFRecordWriter(str(path)) as out:
             for record in self.iterate_as_records(cursor):
                 dict_format = record.coarse_dict if coarse else record.atomic_dict
@@ -285,14 +302,26 @@ class HydroNetDB:
         output_dir.mkdir(exist_ok=True, parents=True)
 
         # Save the training set
+        project = {'coords_': False}
+        if coarse:
+            project.update({
+                'atomic_bond_': False,
+                'atomic_connectivity_': False,
+            })
+        else:
+            project.update({
+                'coarse_bond_': False,
+                'coarse_connectivity_': False
+            })
         cursor = self.collection.find({'$and': [{'position': {'$gt': val_split}},
-                                                {'position': {'$lt': 1 - test_split}}]}).sort('position')
+                                                {'position': {'$lt': 1 - test_split}}]},
+                                     projection=project)
         self.write_to_tf_records(cursor, output_dir / 'training.proto', coarse=coarse)
 
         # Save the validation set
-        cursor = self.collection.find({'position': {'$lt': val_split}}).sort('position')
+        cursor = self.collection.find({'position': {'$lt': val_split}}, projection=project)
         self.write_to_tf_records(cursor, output_dir / 'validation.proto', coarse=coarse)
 
         # Save the test set
-        cursor = self.collection.find({'position': {'$gt': 1 - test_split}}).sort('position')
+        cursor = self.collection.find({'position': {'$gt': 1 - test_split}}, projection=project)
         self.write_to_tf_records(cursor, output_dir / 'test.proto', coarse=coarse)
