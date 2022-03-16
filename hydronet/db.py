@@ -221,9 +221,12 @@ class HydroNetDB:
     def initialize_index(self):
         """Prepare a new collection.
 
-        Makes the "coord_hash" a unique key
+        Makes the "coord_hash" a unique key, sorts on n_waters and position
         """
-        return self.collection.create_index('coord_hash', unique=True)
+        self.collection.create_index('coord_hash', unique=True)
+        self.collection.create_index([('position', 1)])
+        self.collection.create_index([('n_waters', 1)])
+        return
 
     def add_cluster(self, atoms: ase.Atoms, energy: Optional[float] = None, upsert: bool = False, source: Optional[str] = None) -> bool:
         """Add a cluster to the database
@@ -315,13 +318,13 @@ class HydroNetDB:
             })
         cursor = self.collection.find({'$and': [{'position': {'$gt': val_split}},
                                                 {'position': {'$lt': 1 - test_split}}]},
-                                     projection=project)
+                                     projection=project).sort('position')
         self.write_to_tf_records(cursor, output_dir / 'training.proto', coarse=coarse)
 
         # Save the validation set
-        cursor = self.collection.find({'position': {'$lt': val_split}}, projection=project)
+        cursor = self.collection.find({'position': {'$lt': val_split}}, projection=project).sort('position')
         self.write_to_tf_records(cursor, output_dir / 'validation.proto', coarse=coarse)
 
         # Save the test set
-        cursor = self.collection.find({'position': {'$gt': 1 - test_split}}, projection=project)
+        cursor = self.collection.find({'position': {'$gt': 1 - test_split}}, projection=project).sort('position')
         self.write_to_tf_records(cursor, output_dir / 'test.proto', coarse=coarse)
