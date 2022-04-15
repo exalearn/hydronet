@@ -2,7 +2,6 @@
 import hashlib
 import random
 import base64
-from enum import Enum
 import pickle as pkl
 from pathlib import Path
 from datetime import datetime
@@ -50,6 +49,7 @@ class HydroNetRecord(BaseModel):
     position: float = Field(default_factory=lambda: random.random(), description='Random number used to assign data to training/validation/test sets')
     coord_hash: Optional[str] = Field(None, min_length=64, max_length=64,
                                       description='Hash of the coordinates. Used to ensure structures are not exact duplicates')
+    graph_hash: Optional[str] = Field(None, max_length=32, min_length=32, description='Weisfeiler Lehman (WL) hash of the ')
 
     # Useful tools for provenance
     create_date: datetime = Field(default_factory=datetime.now, description='Time record was created or updated')
@@ -65,6 +65,7 @@ class HydroNetRecord(BaseModel):
         return v
 
     def __init__(self, **kwargs):
+        """Not to be used by most users."""
         super().__init__(**kwargs)
         if 'coords_' in kwargs:
             sha = hashlib.sha256()
@@ -72,6 +73,10 @@ class HydroNetRecord(BaseModel):
             self.coord_hash = sha.hexdigest()[:64]
         elif 'coord_hash' not in kwargs:
             raise ValueError('You must either provide coords_ or coord_hash')
+        if 'atomic_bond_' in kwargs or 'coarse_bond_' in kwargs:
+            self.graph_hash = nx.algorithms.weisfeiler_lehman_graph_hash(self.atomic_nx, edge_attr='label', node_attr='label')
+        elif 'graph_hash' not in kwargs:
+            raise ValueError('You must either provide a graph or graph_hash')
 
     def __repr__(self):
         return f'n_waters={self.n_waters} energy={self.energy}'
@@ -224,6 +229,7 @@ class HydroNetDB:
         Makes the "coord_hash" a unique key, sorts on n_waters and position
         """
         self.collection.create_index('coord_hash', unique=True)
+        self.collection.create_index('graph_hash', unique=True)
         self.collection.create_index([('position', 1)])
         self.collection.create_index([('n_waters', 1)])
         return

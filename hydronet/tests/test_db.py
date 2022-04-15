@@ -20,18 +20,19 @@ def db() -> HydroNetDB:
     db.drop_collection('clusters')
     client.drop_database('hydronet-pytest')
 
+
 @fixture()
 def atoms():
     atoms = Atoms(numbers=[8, 1, 1] * 3,
-                 positions=[[25.3875809, 2.28446364, 8.01933861],
-                            [24.686451, 2.11461496, 7.36908007],
-                            [26.1070786, 1.70453322, 7.77935553],
-                            [22.9643402, 1.68695939, 6.75715494],
-                            [22.7494984, 1.67431045, 7.70416498],
-                            [22.2382431, 2.13693213, 6.33168697],
-                            [23.0780773, 1.86950338, 9.5477314],
-                            [22.9238548, 2.4637537, 10.2781725],
-                            [23.9850082, 2.04813766, 9.2500248]])
+                  positions=[[25.3875809, 2.28446364, 8.01933861],
+                             [24.686451, 2.11461496, 7.36908007],
+                             [26.1070786, 1.70453322, 7.77935553],
+                             [22.9643402, 1.68695939, 6.75715494],
+                             [22.7494984, 1.67431045, 7.70416498],
+                             [22.2382431, 2.13693213, 6.33168697],
+                             [23.0780773, 1.86950338, 9.5477314],
+                             [22.9238548, 2.4637537, 10.2781725],
+                             [23.9850082, 2.04813766, 9.2500248]])
     atoms.set_calculator(SinglePointCalculator(atoms, energy=-1))
     return atoms
 
@@ -41,7 +42,7 @@ def test_create(atoms):
     record = HydroNetRecord.from_atoms(atoms)
     assert np.isclose(record.coords, atoms.get_positions()).all()
     assert record.energy == -1
-    
+
     # Make sure it counted the correct number of rings
     assert record.cycle_hash == "1T0Q0P0H"
 
@@ -50,7 +51,7 @@ def test_create(atoms):
     assert record2.energy == -2
     assert record.coord_hash == record2.coord_hash
     assert record.position != record2.position
-    
+
     # Test JSON parsing
     json_dump = record.json()
     record3 = HydroNetRecord.parse_raw(json_dump)
