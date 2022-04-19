@@ -74,7 +74,8 @@ class HydroNetRecord(BaseModel):
         elif 'coord_hash' not in kwargs:
             raise ValueError('You must either provide coords_ or coord_hash')
         if 'atomic_bond_' in kwargs or 'coarse_bond_' in kwargs:
-            self.graph_hash = nx.algorithms.weisfeiler_lehman_graph_hash(self.atomic_nx, edge_attr='label', node_attr='label')
+            self.graph_hash = nx.algorithms.weisfeiler_lehman_graph_hash(self.atomic_nx, edge_attr='label', node_attr='label',
+                                                                         iterations=nx.diameter(self.atomic_nx) + 1)
         elif 'graph_hash' not in kwargs:
             raise ValueError('You must either provide a graph or graph_hash')
 
@@ -229,7 +230,7 @@ class HydroNetDB:
         Makes the "coord_hash" a unique key, sorts on n_waters and position
         """
         self.collection.create_index('coord_hash', unique=True)
-        self.collection.create_index('graph_hash', unique=True)
+        self.collection.create_index('graph_hash')
         self.collection.create_index([('position', 1)])
         self.collection.create_index([('n_waters', 1)])
         return
