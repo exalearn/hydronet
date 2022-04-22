@@ -174,6 +174,10 @@ if __name__ == "__main__":
     env = SimpleEnvironment(maximum_size=args.max_size, reward=reward, second_reward=second_reward, only_last=only_last)
     tf_env = TFPyEnvironment(env)
 
+    # Save the environment to disk for use later
+    with open(out_dir / 'env.pkl', 'wb') as fp:
+        pkl.dump(env, fp)
+
     # Make a reward for MPNN energy
     model = tf.keras.models.load_model(args.mpnn_path, custom_objects=custom_objects)
     eng_reward = MPNNReward(model, per_water=False)
