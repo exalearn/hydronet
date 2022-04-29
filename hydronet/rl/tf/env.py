@@ -134,6 +134,11 @@ class SimpleEnvironment(PyEnvironment):
             self.get_state_as_tensors()
         )
 
+    @property
+    def size(self):
+        """Number of waters in the cluster"""
+        return len(self._state)
+
     def _step(self, action: types.NestedArray) -> ts.TimeStep:
         # If it is a new episode is starting
         if self._episode_ended:
@@ -186,7 +191,7 @@ class SimpleEnvironment(PyEnvironment):
             self._episode_ended = True
             return ts.termination(
                 self.get_state_as_tensors(),
-                reward=self.second_reward_fn(_last_state) #if self.only_last else reward
+                reward=self.second_reward_fn(_last_state)  # if self.only_last else reward
             )
         else:
             return ts.transition(

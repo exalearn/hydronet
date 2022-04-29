@@ -2,14 +2,16 @@
 
 We want functions that are pure and take/produce data types which are serializable.
 """
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional, List
 
 from tf_agents.agents import PPOClipAgent
 from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
 from tf_agents.environments import PyEnvironment, TFPyEnvironment
 from tf_agents.replay_buffers import TFUniformReplayBuffer
 import tensorflow as tf
+import networkx as nx
 import pandas as pd
+from tf_agents.trajectories import StepType
 
 from hydronet.rl.tf.networks import GCPNActorNetwork, GCPNCriticNetwork
 
@@ -100,3 +102,46 @@ def train_rl_policy(
             train_log.append(step_info)
 
     return actor_net, critic_net, pd.DataFrame(train_log)
+
+
+def generate_clusters(
+        env: PyEnvironment,
+        actor_net: GCPNActorNetwork,
+        target_count: int,
+        min_cluster_size: int = 4
+) -> List[nx.DiGraph]:
+    """Generate a large number of clusters by sampling the environment under the guidance of an RL agent
+
+    Args:
+        env: Environment to use to simulate water cluster changes
+        actor_net: Network used to suggest which action to take next
+        target_count: Target number of graphs to gather
+        min_cluster_size: Minimum cluster size to both reporting
+    Returns:
+        List of clusters generated from sampling the actor network
+    """
+
+    # Perform episodes until we have reached the target number of clusters
+    output: List[nx.DiGraph] = []
+    tf_env = TFPyEnvironment(env)
+    while len(output) < target_count:
+        # Start the episode
+        state = tf_env.reset()
+
+        # Loop until the episode is complete
+        while True:
+            # Sample the next action
+            action_dist, _ = actor_net(state.observation)
+            action = action_dist.sample()
+
+            # Take the step and get the new state
+            state = tf_env.step(action)
+            if state.step_type == StepType.LAST:
+                break
+
+            # Add the graph form of the state to the output
+            if env.size >= min_cluster_size:
+                output.append(env.get_state())
+
+    return output
+
