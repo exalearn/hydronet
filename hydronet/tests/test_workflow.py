@@ -1,7 +1,7 @@
 from pytest import fixture
 from tf_agents.environments import TFPyEnvironment
 
-from hydronet.workflow import train_rl_policy, generate_clusters
+from hydronet.workflow import train_rl_policy, generate_clusters, invert_and_relax
 from hydronet.rl.tf.env import SimpleEnvironment
 from hydronet.rl.tf.networks import GCPNActorNetwork, GCPNCriticNetwork
 
@@ -46,3 +46,9 @@ def test_generate(env, actor_net):
     # Test setting a minimum bound
     clusters = generate_clusters(env, actor_net, 100, min_cluster_size=6)
     assert min(map(len, clusters)) == 6
+
+
+def test_invert(triangle_cluster):
+    records = invert_and_relax([triangle_cluster])
+    assert records[0].n_waters == 3
+    assert records[0].cycle_hash.startswith('1T')  # Should be a triangular cluster

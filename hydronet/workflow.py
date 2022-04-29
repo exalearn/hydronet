@@ -3,17 +3,25 @@
 We want functions that are pure and take/produce data types which are serializable.
 """
 from typing import Tuple, Dict, Any, Optional, List
+import os
 
+from ase import Atoms
+from ase.optimize import BFGS
 from tf_agents.agents import PPOClipAgent
 from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
 from tf_agents.environments import PyEnvironment, TFPyEnvironment
 from tf_agents.replay_buffers import TFUniformReplayBuffer
+from tf_agents.trajectories import StepType
 import tensorflow as tf
 import networkx as nx
 import pandas as pd
-from tf_agents.trajectories import StepType
 
+from hydronet.db import HydroNetRecord
+from hydronet.inversion.force import convert_directed_graph_to_xyz
 from hydronet.rl.tf.networks import GCPNActorNetwork, GCPNCriticNetwork
+from ttm.ase import TTMCalculator
+
+_ttm = TTMCalculator()
 
 
 def train_rl_policy(
@@ -145,3 +153,49 @@ def generate_clusters(
 
     return output
 
+
+def invert_and_relax(
+        graphs: List[nx.DiGraph],
+        number_h_guesses: int = 32,
+        attempts_per_graph: int = 8,
+        relaxations_per_graph: int = 2,
+        hbond_distance: float = 2.9
+) -> List[HydroNetRecord]:
+    """Invert graphs and return record describing the lowest-energy structure
+
+    Args:
+        graphs: List of graphs to invert into 3D coordinates
+        number_h_guesses: Number of placements of hydrogens to test for each inversion
+        attempts_per_graph: Number of inversion attempts to create for a single graph
+        relaxations_per_graph: Number of the lowest-energy attempts to relax for each graph
+        hbond_distance:
+    Returns:
+         Records describing the lowest-energy structure for each graph
+    """
+
+    # Loop over each graph
+    output: List[HydroNetRecord] = []
+    for graph in graphs:
+        # Attempt an inversion process several times times
+        attempts = [convert_directed_graph_to_xyz(graph, n_h_guesses=number_h_guesses, hbond_distance=hbond_distance) for _ in range(attempts_per_graph)]
+
+        # Sort them by energy
+        by_energy = sorted(attempts, key=_ttm.get_potential_energy)
+
+        # Invert the ones that are lowest in energy
+        lowest: List[Tuple[Atoms, float]] = []
+        for atoms in by_energy[:relaxations_per_graph]:
+            # Relax the structure
+            atoms.set_calculator(_ttm)
+            dyn = BFGS(atoms, logfile=os.devnull)
+            dyn.run(fmax=0.05, steps=1024)
+            atoms.set_calculator()  # Clear it
+
+            # Store the final energy
+            lowest.append((atoms, _ttm.get_potential_energy(atoms)))
+
+        # Turn the lowest-energy one into a HydroNet record
+        best = sorted(lowest, key=lambda x: x[1])[0]
+        output.append(HydroNetRecord.from_atoms(*best))
+
+    return output
