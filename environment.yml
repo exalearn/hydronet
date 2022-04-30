@@ -4,11 +4,11 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python==3.8.*
+  - python==3.9.*
   - ase==3.19.*
   - networkx==2.7.*
   - pandas==0.25.*
-  - scikit-learn==0.22.*
+  - scikit-learn==1.*
   - mongodb==5.*
   - pydantic
   - pymongo
@@ -20,7 +20,7 @@ dependencies:
   - pip
   - pip:
       - torch==1.9.0+cpu
-      - intel-tensorflow==2.4.*
+      - intel-tensorflow==2.6.*
       - globus-cli
       - schnetpack
       - tf-agents==0.8.*
