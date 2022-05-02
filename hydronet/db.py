@@ -3,6 +3,7 @@ import hashlib
 import random
 import base64
 import pickle as pkl
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Iterable, Union
@@ -212,17 +213,26 @@ class HydroNetDB:
         self.collection = collection
 
     @classmethod
-    def from_connection_info(cls, hostname: str = "localhost", port: Optional[int] = None,
+    def from_connection_info(cls, hostname: str = None, port: Optional[int] = None,
+                             username: str = None, password: str = None,
                              database: str = "hydronet", collection: str = "clusters", **kwargs) -> 'HydroNetDB':
         """Connect to MongoDB and create the database wrapper
 
         Args:
             hostname: Host of the MongoDB
             port: Port of the service
+            username: Username for the MongoDB
+
             database: Name of the database holding desired data
             collection: Name of the collection holding the water cluster data
         """
-        client = MongoClient(hostname, port=port, **kwargs)
+        if hostname is None:
+            hostname = os.environ.get('HYDRONET_HOSTNAME', 'localhost')
+        if username is None:
+            username = os.environ.get('HYDRONET_USERNAME', None)
+        if password is None:
+            password = os.environ.get('HYDRONET_PASSWORD', None)
+        client = MongoClient(hostname, username=username, password=password, port=port, **kwargs)
         db = client.get_database(database)
         return cls(db.get_collection(collection))
 
