@@ -21,6 +21,7 @@ dependencies:
   - pip:
       - torch==1.9.0+cpu
       - intel-tensorflow==2.6.*
+      - colmena>=0.3.0
       - globus-cli
       - schnetpack
       - tf-agents==0.8.*
