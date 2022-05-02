@@ -6,7 +6,6 @@ and updating the reward function used by RL using the validation results.
 
 To do list: 
 - [ ] Add a model training function
-- [ ] Feed the model training back into the RL policy
-- [ ] Automatically balance the number of rollout and validation workers 
+- [ ] Feed the model training back into the RL policy 
 - [ ] De-duplicate list of graphs to be evaluated
 - [ ] Push updated results to the MongoDB
