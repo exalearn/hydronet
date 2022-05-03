@@ -343,6 +343,16 @@ class HydroNetDB:
         output_dir = Path(directory)
         output_dir.mkdir(exist_ok=True, parents=True)
 
+        # Write some dataset information in there
+        with open(output_dir / 'data-info.json', 'w') as fp:
+            json.dump({
+                'write_time': datetime.now().isoformat(),
+                'data_size': self.collection.estimated_document_count(),
+                'val_split': val_split,
+                'test_split': test_split,
+                'coarse': coarse
+            }, fp, indent=2)
+
         # Get the extension and output function
         out_fun = None
         extension = None
