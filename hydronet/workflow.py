@@ -2,7 +2,9 @@
 
 We want functions that are pure and take/produce data types which are serializable.
 """
+from functools import partial
 from typing import Tuple, Dict, Any, Optional, List
+from multiprocessing import Pool
 import os
 
 from ase import Atoms
@@ -116,7 +118,8 @@ def generate_clusters(
         env: PyEnvironment,
         actor_net: GCPNActorNetwork,
         target_count: int,
-        min_cluster_size: int = 4
+        min_cluster_size: int = 4,
+        dedup_level: Optional[str] = None,
 ) -> List[nx.DiGraph]:
     """Generate a large number of clusters by sampling the environment under the guidance of an RL agent
 
@@ -125,6 +128,10 @@ def generate_clusters(
         actor_net: Network used to suggest which action to take next
         target_count: Target number of graphs to gather
         min_cluster_size: Minimum cluster size to both reporting
+        dedup_level: How much to de-duplicate the output graphs.
+            - ``None``: Do not attempt to deduplicate
+            - 'hash': Get graphs with different hashes
+            - 'isomorphic': Check if graphs are isomorphic (TBD)
     Returns:
         List of clusters generated from sampling the actor network
     """
@@ -150,6 +157,21 @@ def generate_clusters(
             # Add the graph form of the state to the output
             if env.size >= min_cluster_size:
                 output.append(env.get_state())
+
+    # De-duplication phase
+    if dedup_level is None:
+        pass
+    elif dedup_level.lower() == 'hash':
+        # Compute a hash for each cluster
+        with Pool() as p:
+            fun = partial(nx.algorithms.weisfeiler_lehman_graph_hash, edge_attr='label', node_attr='label',
+                          iterations=max(map(len, output)) + 1)
+            hashes = p.map(fun, output)
+
+        # Use a dictionary to de-duplicate everything (pardon the one-liner)
+        output = list(dict(zip(hashes, output)).values())
+    else:
+        raise ValueError(f'De-duplication strategy not implemented: {dedup_level}')
 
     return output
 

@@ -42,7 +42,7 @@ class HydroNetRecord(BaseModel):
     coarse_connectivity_: bytes = Field(None, description='Connectivity for the coarse graph')
     atomic_bond_: bytes = Field(None, description='Bond types for the coarse graph')
     atomic_connectivity_: bytes = Field(None, description='Connectivity for the coarse graph')
-    
+
     # Details about the graph structure
     cycle_hash: str = Field(..., description='List of the number of cycles of between 3 and 6, written as a string.')
 
@@ -55,13 +55,13 @@ class HydroNetRecord(BaseModel):
     # Useful tools for provenance
     create_date: datetime = Field(default_factory=datetime.now, description='Time record was created or updated')
     source: Optional[str] = Field(None, description='Where this entry came from')
-    
+
     class Config:
         json_encoders = {bytes: lambda x: '_base64' + base64.b64encode(x).decode('ascii')}
-        
+
     @validator('coords_', 'coarse_bond_', 'coarse_connectivity_', 'atomic_bond_', 'atomic_connectivity_')
     def _debase64_encode(v):
-        if v[:7] == b'_base64': # Attempt to decode base64
+        if v[:7] == b'_base64':  # Attempt to decode base64
             return base64.b64decode(v[7:])
         return v
 
@@ -185,7 +185,7 @@ class HydroNetRecord(BaseModel):
         coarse_dict = create_inputs_from_nx(coarse_graph)
         coarse_bond_ = np.array(coarse_dict["bond"]).dumps()
         _coarse_conn = np.array(coarse_dict["connectivity"]).dumps()
-        
+
         # Count the number of cycles
         cycle_hash = "".join(
             f"{count_rings(coarse_graph, i)}{l}"
@@ -337,7 +337,7 @@ class HydroNetDB:
             })
         cursor = self.collection.find({'$and': [{'position': {'$gt': val_split}},
                                                 {'position': {'$lt': 1 - test_split}}]},
-                                     projection=project).sort('position')
+                                      projection=project).sort('position')
         self.write_to_tf_records(cursor, output_dir / 'training.proto', coarse=coarse)
 
         # Save the validation set

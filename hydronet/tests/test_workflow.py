@@ -47,6 +47,9 @@ def test_generate(env, actor_net):
     clusters = generate_clusters(env, actor_net, 100, min_cluster_size=6)
     assert min(map(len, clusters)) == 6
 
+    # Test de-duplication
+    generate_clusters(env, actor_net, 100, dedup_level='hash')
+
 
 def test_invert(triangle_cluster):
     records = invert_and_relax([triangle_cluster])
