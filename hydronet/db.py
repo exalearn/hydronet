@@ -3,6 +3,7 @@ import hashlib
 import random
 import base64
 import pickle as pkl
+import json
 import os
 from pathlib import Path
 from datetime import datetime
@@ -74,13 +75,14 @@ class HydroNetRecord(BaseModel):
             self.coord_hash = sha.hexdigest()[:64]
         elif 'coord_hash' not in kwargs:
             raise ValueError('You must either provide coords_ or coord_hash')
-        if 'atomic_bond_' in kwargs or 'coarse_bond_' in kwargs:
-            self.graph_hash = nx.algorithms.weisfeiler_lehman_graph_hash(self.atomic_nx,
-                                                                         edge_attr='label',
-                                                                         node_attr='label',
-                                                                         iterations=nx.diameter(self.atomic_nx) + 1)
-        elif 'graph_hash' not in kwargs:
-            raise ValueError('You must either provide a graph or graph_hash')
+        if 'graph_hash' not in kwargs:
+            if 'atomic_bond_' in kwargs or 'coarse_bond_' in kwargs:
+                self.graph_hash = nx.algorithms.weisfeiler_lehman_graph_hash(self.atomic_nx,
+                                                                             edge_attr='label',
+                                                                             node_attr='label',
+                                                                             iterations=nx.diameter(self.atomic_nx) + 1)
+            else:
+                raise ValueError('You must either provide a graph or graph_hash')
 
     def __repr__(self):
         return f'n_waters={self.n_waters} energy={self.energy}'
@@ -298,30 +300,59 @@ class HydroNetDB:
             coarse: Whether to write the coarse or atomic graph
         """
 
-        options = tf.io.TFRecordOptions(
-            compression_type="ZLIB",
-            compression_level=5,
-        )
         with tf.io.TFRecordWriter(str(path)) as out:
             for record in self.iterate_as_records(cursor):
                 dict_format = record.coarse_dict if coarse else record.atomic_dict
                 out.write(make_tfrecord(dict_format))
 
-    def write_datasets(self, directory: Union[str, Path], coarse: bool = True, val_split: float = 0.1, test_split: float = 0.1):
+    def write_to_json(self, cursor: Cursor, path: Union[str, Path], coarse: bool = True):
+        """Write results of a query to the JSON dictionary format
+
+        Args:
+            cursor: Results of a query
+            path: Path to the JSON file
+            coarse: Whether to write the coarse or atomic graph
+        """
+
+        with open(path, 'w') as fp:
+            for record in self.iterate_as_records(cursor):
+                dict_format = record.coarse_dict if coarse else record.atomic_dict
+                dict_format = dict((k, v.tolist() if isinstance(v, np.ndarray) else v) for k, v in dict_format.items())
+                print(json.dumps(dict_format), file=fp)
+
+    def write_datasets(self, directory: Union[str, Path], file_format: str = 'protobuf', coarse: bool = True, val_split: float = 0.1, test_split: float = 0.1):
         """Write the training, test, and validation sets to a directory
+
+        There are several format options:
+            - `protobuf` (default): Can be read efficiently by TensorFlow but cannot be appended to
+            - `json`: Write the data as a line-delimited JSON file. Must be converted to protobuf before training an ML model,
+                but can be appended to
 
         Args:
             directory: Path to an output directory
+            file_format: Desired output format
             coarse: Whether to write the coarse or atomic graphs
             val_split: Fraction of data to use for the validation set
             test_split: Fraction of the data to use for the test set
         """
 
         assert val_split + test_split < 1, 'Training and test sets should add to less than 1'
+        assert file_format in ['protobuf', 'json'], 'File format is not supported'
 
         # Make the directory, if need be
         output_dir = Path(directory)
         output_dir.mkdir(exist_ok=True, parents=True)
+
+        # Get the extension and output function
+        out_fun = None
+        extension = None
+        if file_format == 'protobuf':
+            out_fun = self.write_to_tf_records
+            extension = '.proto'
+        elif file_format == 'json':
+            out_fun = self.write_to_json
+            extension = '.json'
+        assert out_fun is not None, f'{file_format} is not yet supported'
 
         # Save the training set
         project = {'coords_': False}
@@ -338,12 +369,12 @@ class HydroNetDB:
         cursor = self.collection.find({'$and': [{'position': {'$gt': val_split}},
                                                 {'position': {'$lt': 1 - test_split}}]},
                                       projection=project).sort('position')
-        self.write_to_tf_records(cursor, output_dir / 'training.proto', coarse=coarse)
+        out_fun(cursor, output_dir / f'training{extension}', coarse=coarse)
 
         # Save the validation set
         cursor = self.collection.find({'position': {'$lt': val_split}}, projection=project).sort('position')
-        self.write_to_tf_records(cursor, output_dir / 'validation.proto', coarse=coarse)
+        out_fun(cursor, output_dir / f'validation{extension}', coarse=coarse)
 
         # Save the test set
         cursor = self.collection.find({'position': {'$gt': 1 - test_split}}, projection=project).sort('position')
-        self.write_to_tf_records(cursor, output_dir / 'test.proto', coarse=coarse)
+        out_fun(cursor, output_dir / f'test{extension}', coarse=coarse)
