@@ -1,13 +1,13 @@
 from argparse import ArgumentParser
-from collections import deque
+from collections import deque, defaultdict
 from datetime import datetime
 from functools import partial, update_wrapper
 from hashlib import sha256
 from pathlib import Path
 from threading import Event
+from csv import DictWriter
 from time import sleep
-from typing import Tuple
-from queue import LifoQueue, Queue, Empty
+from typing import Tuple, List
 import pickle as pkl
 import logging
 import json
@@ -15,6 +15,8 @@ import gzip
 import sys
 import os
 
+import numpy as np
+import pandas as pd
 from colmena.redis.queue import ClientQueues, make_queue_pairs
 from colmena.task_server import ParslTaskServer
 from colmena.thinker import BaseThinker, result_processor, task_submitter, ResourceCounter, agent
@@ -22,6 +24,7 @@ from colmena.models import Result
 from parsl import Config, HighThroughputExecutor
 import networkx as nx
 
+from hydronet.db import HydroNetRecord
 from hydronet.rl.tf.env import SimpleEnvironment
 from hydronet.rl.tf.networks import GCPNActorNetwork, GCPNCriticNetwork
 from hydronet.workflow import train_rl_policy, generate_clusters, invert_and_relax
@@ -60,7 +63,8 @@ class Thinker(BaseThinker):
                  actor_net: GCPNActorNetwork,
                  critic_net: GCPNCriticNetwork,
                  queue_target: int,
-                 min_generators: int
+                 min_generators: int,
+                 data_dir: Path
                  ):
         """
 
@@ -73,6 +77,7 @@ class Thinker(BaseThinker):
             actor_net: Network used to pick which hydrogen bonds to add
             critic_net: Network used to value the current state of a water cluster
             queue_target: Target size of the list of clusters to be evaluated
+            data_dir: Directory containing the datasets and
         """
         super().__init__(queues, ResourceCounter(total_slots=node_count, task_types=['train_rl', 'generate', 'evaluate']))
 
@@ -80,6 +85,20 @@ class Thinker(BaseThinker):
         self.out_dir = output_dir
         self.num_to_create = num_to_create
         self.num_created = 0
+
+        # Data for storing results persistently
+        self.data_dir = data_dir
+        self.energy_summary_path = self.data_dir / 'energy_summary.csv'
+
+        #  Get the energy for each graph
+        energy_summary = pd.read_csv(self.energy_summary_path)
+        self.energy_summary_columns = energy_summary.columns  # Used to write new data to the CSV
+        self.logger.info(f'Loaded energies of {len(energy_summary)} clusters')
+
+        energy_summary = energy_summary.sort_values('energy', ascending=True).drop_duplicates('graph_hash', keep='first')
+        self.best_energies = dict(zip(energy_summary['graph_hash'], energy_summary['energy']))
+        self.record_clusters = energy_summary.groupby('n_waters')['energy'].min().to_dict()
+        self.logger.info(f'Gathered {len(self.best_energies)} energies of unique graphs')
 
         # State for the RL policy
         self.actor_net = actor_net
@@ -134,6 +153,11 @@ class Thinker(BaseThinker):
             # Get the results and update the state of the class
             self.actor_net, self.critic_net, train_log = result.value
 
+            # Ensure that at least one generator worker is available to update the task queue
+            if self.rec.allocated_slots("generate") == 0:
+                self.logger.info('Asking to increase generator count by 1')
+                self.rec.reallocate("evaluate", "generate", 1, block=False)
+
             # Write the task results to disk
             with open(self.out_dir / 'policy-update-results.json', 'a') as fp:
                 print(result.json(exclude={'value'}), file=fp)
@@ -165,7 +189,7 @@ class Thinker(BaseThinker):
 
         # Count how many are returned
         new_clusters = result.value
-        self.logger.info(f'Received {len(new_clusters)} created with actor net from round {result.task_info["actor_gen"]}')
+        self.logger.info(f'Received {len(new_clusters)} created with actor network from round {result.task_info["actor_gen"]}')
 
         # Push them to the evaluation equeue
         for new in new_clusters:
@@ -189,11 +213,11 @@ class Thinker(BaseThinker):
         """Submit graphs to be evaluated"""
 
         # Get a chunk of graphs to evaluate
-        chunk_size = 100
+        chunk_size = 4
         self.logger.info(f'Gathering {chunk_size} graphs to evaluate')
         to_evaluate = []
         standoff = 10.
-        while len(to_evaluate) < 100 and not self.done.is_set():
+        while len(to_evaluate) < chunk_size and not self.done.is_set():
             try:
                 to_evaluate.append(self.eval_queue.pop())
             except IndexError:
@@ -202,7 +226,7 @@ class Thinker(BaseThinker):
                 sleep(standoff)
 
         # Submit them to invert
-        self.logger.info(f'Submitting {chunk_size} graphs to evaluate. Backlog: {len(self.eval_queue)}')
+        self.logger.info(f'Submitting {len(to_evaluate)} graphs to evaluate. Backlog: {len(self.eval_queue)}')
         self.queues.send_inputs(
             to_evaluate,
             method='invert_and_relax',
@@ -212,10 +236,17 @@ class Thinker(BaseThinker):
 
     @result_processor(topic='evaluation')
     def receive_evaluate(self, result: Result):
-        """Receive inverted graphs and store them to disk (later our cloud DB)"""
+        """Receive inverted graphs, store if the graph is lower in energy by than a previous structure at that energy (or if that graph is new),
+         and store them to disk (later our cloud DB)"""
 
         # Mark that resources are now free
         self.rec.release('evaluate', 1)
+
+        # If the queue is 50% below the target size, move a worker back to generation
+        if len(self.eval_queue) < self.eval_queue_target * 0.5 and self.reallocating.is_set():
+            self.logger.info('Queue has shrunk to below target size, reallocating nodes to generation')
+            self.reallocating.set()
+            self.rec.reallocate('evaluate', 'generate', 1, block=False, callback=self.reallocating.clear)
 
         # Make sure it was successful
         assert result.success, result.failure_info
@@ -224,20 +255,64 @@ class Thinker(BaseThinker):
         with (self.out_dir / 'evaluation-records.json').open('a') as fp:
             print(result.json(exclude={'value', 'inputs'}), file=fp)
 
-        # Write the records to disk
-        new_clusters = result.value
+        # Get the clusters
+        new_clusters: List[HydroNetRecord] = result.value
         self.num_created += len(new_clusters)
-        self.logger.info(f'Retrieved {len(new_clusters)} new water clusters. {self.num_to_create - self.num_created} left to evaluate')
-        with gzip.open(self.out_dir / 'new-records.json.gz', 'at') as fp:
-            for record in result.value:
-                print(record.json(), file=fp)
-        self.logger.info('Saved them to disk')
+        self.logger.info(f'Received {len(new_clusters)} new water clusters. {self.num_to_create - self.num_created} left to evaluate')
 
-        # If the queue is 50% below the target size, move a worker back to generation
-        if len(self.eval_queue) < self.eval_queue_target * 0.5 and self.reallocating.is_set():
-            self.logger.info('Queue has shrunk to below target size, reallocating nodes to generation')
-            self.reallocating.set()
-            self.rec.reallocate('evaluate', 'generate', 1, block=False, callback=self.reallocating.clear)
+        # If there are none, skip the following
+        if len(new_clusters) == 0:
+            return
+
+        # Check if the results are new
+        accepted_clusters: List[HydroNetRecord] = []
+        for cluster in new_clusters:
+            cluster.source = 'rl'
+
+            prev_best = self.best_energies.get(cluster.graph_hash, np.inf)
+            if cluster.energy < prev_best:
+                self.best_energies[cluster.graph_hash] = cluster.energy
+                accepted_clusters.append(cluster)
+
+            if cluster.energy < self.record_clusters.get(cluster.n_waters, np.inf):
+                increase = self.best_energies[cluster.n_waters] - cluster.energy
+                self.best_energies[cluster.n_waters] = cluster.energy
+                self.logger.warning(f'Found a {cluster.n_waters} water cluster lower in energy by {increase:.3f} kcal')
+        self.logger.info(f'{len(accepted_clusters)} ({len(accepted_clusters) / len(new_clusters) * 100:.1f}%) clusters in this batch are new or better.')
+
+        # Write the accepted records to disk
+        with open(self.out_dir / 'new-records.json', 'a') as fp:
+            for record in accepted_clusters:
+                print(record.json(), file=fp)
+        self.logger.info('Saved the accepted cluster records to disk')
+
+        # Update the "best energy" dictionary
+        with open(self.energy_summary_path, 'a') as fp:
+            writer = DictWriter(fp, fieldnames=self.energy_summary_columns)
+            for record in accepted_clusters:
+                writer.writerow(record.dict(include=set(self.energy_summary_columns)))
+
+        # Update the training sets
+        data_info = json.loads((self.data_dir / 'data-info.json').read_text())
+        added_to = defaultdict(int)
+        for record in accepted_clusters:
+            # Find which dataset the cluster is assigned to
+            path = self.data_dir
+            if record.position < data_info['val_split']:
+                path /= "validation.json"
+                added_to['validation'] += 1
+            elif record.position > 1 - data_info['test_split']:
+                path /= "test.json"
+                added_to['test'] += 1
+            else:
+                path /= "training.json"
+                added_to['training'] += 1
+
+            # Add it
+            with path.open('a') as fp:
+                print(record.json(), file=fp)
+        msg = [f"{v} to {k}" for k, v in added_to.items()]
+        self.logger.info(f'Wrote records to disk. {", ".join(msg)}')
 
         # Determine if we're done
         if self.num_created >= self.num_to_create:
@@ -254,11 +329,15 @@ if __name__ == '__main__':
     group = parser.add_argument_group(title='RL Options', description='Settings related to training the RL policy')
     group.add_argument('--rl-directory', help='Path to the directory containing an initial policy, environment, and reward function')
 
+    #  Data source settings
+    group = parser.add_argument_group(title='Data Details', description='Settings related to persistent storage of the results')
+    group.add_argument('--data-directory', default='data', help='Path to the directory with the train/test/validation sets')
+
     #  Coordination between threads
     group = parser.add_argument_group(title='Coordination', description='Coordination between different types of tasks')
     group.add_argument('--evaluation-buffer', type=int, help='Target size of buffer of tasks between the generation and evaluation tasks. '
                                                              'The application will attempt to stay within 50% of this value.', default=10000)
-    group.add_argument('--min-generators', type=int, default=1, help='Minimum number of workers devoted to generation tasks.')
+    group.add_argument('--min-generators', type=int, default=0, help='Minimum number of workers devoted to generation tasks.')
 
     #  Computational resources
     group = parser.add_argument_group(title='Computational Resources', description='Resources available to the thinker')
@@ -352,6 +431,7 @@ if __name__ == '__main__':
         actor_net=actor_net,
         critic_net=critic_net,
         environment=env,
+        data_dir=Path(args.data_directory),
     )
 
     try:
