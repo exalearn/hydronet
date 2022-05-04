@@ -190,7 +190,7 @@ def invert_and_relax(
         number_h_guesses: Number of placements of hydrogens to test for each inversion
         attempts_per_graph: Number of inversion attempts to create for a single graph
         relaxations_per_graph: Number of the lowest-energy attempts to relax for each graph
-        hbond_distance:
+        hbond_distance: Initial distance for the hydrogen bonds
     Returns:
          Records describing the lowest-energy structure for each graph
     """
@@ -198,7 +198,7 @@ def invert_and_relax(
     # Loop over each graph
     output: List[HydroNetRecord] = []
     for graph in graphs:
-        # Attempt an inversion process several times times
+        # Attempt an inversion process several times
         attempts = [convert_directed_graph_to_xyz(graph, n_h_guesses=number_h_guesses, hbond_distance=hbond_distance) for _ in range(attempts_per_graph)]
 
         # Sort them by energy
@@ -218,6 +218,9 @@ def invert_and_relax(
 
         # Turn the lowest-energy one into a HydroNet record
         best = sorted(lowest, key=lambda x: x[1])[0]
-        output.append(HydroNetRecord.from_atoms(*best))
+        try:
+            output.append(HydroNetRecord.from_atoms(*best))
+        except nx.NetworkXError:
+            continue
 
     return output
