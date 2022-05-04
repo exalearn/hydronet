@@ -75,7 +75,7 @@ class HydroNetRecord(BaseModel):
             raise ValueError('You must either provide coords_ or coord_hash')
         if 'atomic_bond_' in kwargs or 'coarse_bond_' in kwargs:
             self.graph_hash = nx.algorithms.weisfeiler_lehman_graph_hash(self.atomic_nx, edge_attr='label', node_attr='label',
-                                                                         iterations=nx.diameter(self.atomic_nx) + 1)
+                                                                         iterations=len(self.atomic_nx) + 1)
         elif 'graph_hash' not in kwargs:
             raise ValueError('You must either provide a graph or graph_hash')
 
