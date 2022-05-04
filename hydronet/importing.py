@@ -71,7 +71,7 @@ def infer_water_cluster_bonds(atoms: ase.Atoms):
 
 def create_graph(atoms):
     """
-    Given a ASE atoms object, this function returns a graph structure with following properties.
+    Given an ASE atoms object, this function returns a graph structure with following properties.
         1) Each graph has two graph-level attributes: actual_energy and predicted_energy
         2) Each node represents an atom and has two attributes: label ('O'/'H' for oxygen and hydrogen) and 3-dimensional
            coordinates.

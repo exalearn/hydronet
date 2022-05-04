@@ -114,3 +114,7 @@ def test_db(db: HydroNetDB, atoms, tmpdir):
     # Test writing the train, val, and test sets
     db.write_datasets(tmpdir)
     assert (tmpdir / 'training.proto').isfile()
+
+    # Test writing to JSON format
+    db.write_datasets(tmpdir, file_format='json')
+    assert (tmpdir / 'training.json').isfile()

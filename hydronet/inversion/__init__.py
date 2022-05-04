@@ -76,12 +76,23 @@ def evaluate_inversion(function: Callable[[nx.DiGraph], ase.Atoms], starting: as
     output['is_isometric'] = nx.is_isomorphic(new_graph, starting_graph)
 
     new_graph_coarse = coarsen_graph(new_graph)
-    new_adj = nx.to_numpy_array(new_graph_coarse.to_undirected(), nodelist=sorted(new_graph_coarse.nodes()), weight='label_id', dtype=int)
-    old_adj = nx.to_numpy_array(starting_graph_coarse.to_undirected(), nodelist=sorted(starting_graph_coarse.nodes()), weight='label_id', dtype=int)
-    output['adj_difference'] = int((new_adj != old_adj).sum())
+    output['adj_difference'] = measure_adj_difference(new_graph_coarse, starting_graph_coarse)
 
     # Compute the RMSD
     _, rmsd = Rotation.align_vectors(starting.positions, new_geom.positions)[:2]
     output['rmsd'] = rmsd
 
     return output
+
+
+def measure_adj_difference(graph_a: nx.DiGraph, graph_b: nx.DiGraph) -> int:
+    """Measure the number of different bonds between two graphs of water clusters
+
+    Args:
+        graph_a, graph_b: Two graphs to compare in "coarse" format
+    Returns:
+        Number of different
+    """
+    new_adj = nx.to_numpy_array(graph_a.to_undirected(), nodelist=sorted(graph_a.nodes()), weight='label_id', dtype=int)
+    old_adj = nx.to_numpy_array(graph_b.to_undirected(), nodelist=sorted(graph_b.nodes()), weight='label_id', dtype=int)
+    return int((new_adj != old_adj).sum()) // 2

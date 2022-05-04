@@ -3,6 +3,8 @@ import hashlib
 import random
 import base64
 import pickle as pkl
+import json
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Iterable, Union
@@ -41,7 +43,7 @@ class HydroNetRecord(BaseModel):
     coarse_connectivity_: bytes = Field(None, description='Connectivity for the coarse graph')
     atomic_bond_: bytes = Field(None, description='Bond types for the coarse graph')
     atomic_connectivity_: bytes = Field(None, description='Connectivity for the coarse graph')
-    
+
     # Details about the graph structure
     cycle_hash: str = Field(..., description='List of the number of cycles of between 3 and 6, written as a string.')
 
@@ -54,13 +56,13 @@ class HydroNetRecord(BaseModel):
     # Useful tools for provenance
     create_date: datetime = Field(default_factory=datetime.now, description='Time record was created or updated')
     source: Optional[str] = Field(None, description='Where this entry came from')
-    
+
     class Config:
         json_encoders = {bytes: lambda x: '_base64' + base64.b64encode(x).decode('ascii')}
-        
+
     @validator('coords_', 'coarse_bond_', 'coarse_connectivity_', 'atomic_bond_', 'atomic_connectivity_')
     def _debase64_encode(v):
-        if v[:7] == b'_base64': # Attempt to decode base64
+        if v[:7] == b'_base64':  # Attempt to decode base64
             return base64.b64decode(v[7:])
         return v
 
@@ -73,11 +75,14 @@ class HydroNetRecord(BaseModel):
             self.coord_hash = sha.hexdigest()[:64]
         elif 'coord_hash' not in kwargs:
             raise ValueError('You must either provide coords_ or coord_hash')
-        if 'atomic_bond_' in kwargs or 'coarse_bond_' in kwargs:
-            self.graph_hash = nx.algorithms.weisfeiler_lehman_graph_hash(self.atomic_nx, edge_attr='label', node_attr='label',
-                                                                         iterations=len(self.atomic_nx) + 1)
         elif 'graph_hash' not in kwargs:
             raise ValueError('You must either provide a graph or graph_hash')
+        if 'graph_hash' not in kwargs:
+            if 'atomic_bond_' in kwargs or 'coarse_bond_' in kwargs:
+                self.graph_hash = nx.algorithms.weisfeiler_lehman_graph_hash(self.atomic_nx, edge_attr='label', node_attr='label',
+                                                                             iterations=len(self.atomic_nx) + 1)
+            else:
+                raise ValueError('You must either provide a graph or graph_hash')
 
     def __repr__(self):
         return f'n_waters={self.n_waters} energy={self.energy}'
@@ -182,7 +187,7 @@ class HydroNetRecord(BaseModel):
         coarse_dict = create_inputs_from_nx(coarse_graph)
         coarse_bond_ = np.array(coarse_dict["bond"]).dumps()
         _coarse_conn = np.array(coarse_dict["connectivity"]).dumps()
-        
+
         # Count the number of cycles
         cycle_hash = "".join(
             f"{count_rings(coarse_graph, i)}{l}"
@@ -210,17 +215,26 @@ class HydroNetDB:
         self.collection = collection
 
     @classmethod
-    def from_connection_info(cls, hostname: str = "localhost", port: Optional[int] = None,
+    def from_connection_info(cls, hostname: str = None, port: Optional[int] = None,
+                             username: str = None, password: str = None,
                              database: str = "hydronet", collection: str = "clusters", **kwargs) -> 'HydroNetDB':
         """Connect to MongoDB and create the database wrapper
 
         Args:
             hostname: Host of the MongoDB
             port: Port of the service
+            username: Username for the MongoDB
+
             database: Name of the database holding desired data
             collection: Name of the collection holding the water cluster data
         """
-        client = MongoClient(hostname, port=port, **kwargs)
+        if hostname is None:
+            hostname = os.environ.get('HYDRONET_HOSTNAME', 'localhost')
+        if username is None:
+            username = os.environ.get('HYDRONET_USERNAME', None)
+        if password is None:
+            password = os.environ.get('HYDRONET_PASSWORD', None)
+        client = MongoClient(hostname, username=username, password=password, port=port, **kwargs)
         db = client.get_database(database)
         return cls(db.get_collection(collection))
 
@@ -286,30 +300,69 @@ class HydroNetDB:
             coarse: Whether to write the coarse or atomic graph
         """
 
-        options = tf.io.TFRecordOptions(
-            compression_type="ZLIB",
-            compression_level=5,
-        )
         with tf.io.TFRecordWriter(str(path)) as out:
             for record in self.iterate_as_records(cursor):
                 dict_format = record.coarse_dict if coarse else record.atomic_dict
                 out.write(make_tfrecord(dict_format))
 
-    def write_datasets(self, directory: Union[str, Path], coarse: bool = True, val_split: float = 0.1, test_split: float = 0.1):
+    def write_to_json(self, cursor: Cursor, path: Union[str, Path], coarse: bool = True):
+        """Write results of a query to the JSON dictionary format
+
+        Args:
+            cursor: Results of a query
+            path: Path to the JSON file
+            coarse: Whether to write the coarse or atomic graph
+        """
+
+        with open(path, 'w') as fp:
+            for record in self.iterate_as_records(cursor):
+                dict_format = record.coarse_dict if coarse else record.atomic_dict
+                dict_format = dict((k, v.tolist() if isinstance(v, np.ndarray) else v) for k, v in dict_format.items())
+                print(json.dumps(dict_format), file=fp)
+
+    def write_datasets(self, directory: Union[str, Path], file_format: str = 'protobuf', coarse: bool = True, val_split: float = 0.1, test_split: float = 0.1):
         """Write the training, test, and validation sets to a directory
+
+        There are several format options:
+            - `protobuf` (default): Can be read efficiently by TensorFlow but cannot be appended to
+            - `json`: Write the data as a line-delimited JSON file. Must be converted to protobuf before training an ML model,
+                but can be appended to
 
         Args:
             directory: Path to an output directory
+            file_format: Desired output format
             coarse: Whether to write the coarse or atomic graphs
             val_split: Fraction of data to use for the validation set
             test_split: Fraction of the data to use for the test set
         """
 
         assert val_split + test_split < 1, 'Training and test sets should add to less than 1'
+        assert file_format in ['protobuf', 'json'], 'File format is not supported'
 
         # Make the directory, if need be
         output_dir = Path(directory)
         output_dir.mkdir(exist_ok=True, parents=True)
+
+        # Write some dataset information in there
+        with open(output_dir / 'data-info.json', 'w') as fp:
+            json.dump({
+                'write_time': datetime.now().isoformat(),
+                'data_size': self.collection.estimated_document_count(),
+                'val_split': val_split,
+                'test_split': test_split,
+                'coarse': coarse
+            }, fp, indent=2)
+
+        # Get the extension and output function
+        out_fun = None
+        extension = None
+        if file_format == 'protobuf':
+            out_fun = self.write_to_tf_records
+            extension = '.proto'
+        elif file_format == 'json':
+            out_fun = self.write_to_json
+            extension = '.json'
+        assert out_fun is not None, f'{file_format} is not yet supported'
 
         # Save the training set
         project = {'coords_': False}
@@ -325,13 +378,13 @@ class HydroNetDB:
             })
         cursor = self.collection.find({'$and': [{'position': {'$gt': val_split}},
                                                 {'position': {'$lt': 1 - test_split}}]},
-                                     projection=project).sort('position')
-        self.write_to_tf_records(cursor, output_dir / 'training.proto', coarse=coarse)
+                                      projection=project).sort('position')
+        out_fun(cursor, output_dir / f'training{extension}', coarse=coarse)
 
         # Save the validation set
         cursor = self.collection.find({'position': {'$lt': val_split}}, projection=project).sort('position')
-        self.write_to_tf_records(cursor, output_dir / 'validation.proto', coarse=coarse)
+        out_fun(cursor, output_dir / f'validation{extension}', coarse=coarse)
 
         # Save the test set
         cursor = self.collection.find({'position': {'$gt': 1 - test_split}}, projection=project).sort('position')
-        self.write_to_tf_records(cursor, output_dir / 'test.proto', coarse=coarse)
+        out_fun(cursor, output_dir / f'test{extension}', coarse=coarse)
