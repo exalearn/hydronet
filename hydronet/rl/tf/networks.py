@@ -1,4 +1,6 @@
 """Implementations of actor and critic networks that employ message-passing layers"""
+from pathlib import Path
+from typing import Union
 
 import numpy as np
 import tensorflow as tf
@@ -114,7 +116,7 @@ class MPNNNetworkMixin:
         return atom_features
 
 
-class GCPNActorNetwork(MPNNNetworkMixin, network.DistributionNetwork,):
+class GCPNActorNetwork(MPNNNetworkMixin, network.DistributionNetwork, ):
     """Graph convolutional policy network that returns a probability distribution for different actions
     given a certain graph
 
@@ -191,6 +193,25 @@ class GCPNActorNetwork(MPNNNetworkMixin, network.DistributionNetwork,):
         # Reshape the observations to only have one
         batch_size, observations, outer_shape = _unstack_observations(observations)
 
+        # Side operation to compute logits given operations
+        pair_logits = self.compute_logits(observations)
+
+        # Shape the outputs like the original input shape
+        #  DEV NOTE: Do the "batch_utils" have support for these kinds of operations?
+        bond_counts = tf.shape(pair_logits)[-1]
+        output_shape = tf.concat((outer_shape, (batch_size, bond_counts, bond_counts)), axis=0)
+        pair_logits = tf.reshape(pair_logits, output_shape)
+        return MultiCategorical(pair_logits), ()
+
+    def compute_logits(self, observations: dict):
+        """Compute the logits for a series of observations
+
+        Parameters:
+            observations:
+                List of the matrices describing a series of graphs
+        Returns:
+            Logits Tensor
+        """
         # Get the allowed actions
         allowed_actions = observations['allowed_actions']
 
@@ -244,12 +265,68 @@ class GCPNActorNetwork(MPNNNetworkMixin, network.DistributionNetwork,):
             pair_logits
         )
 
-        # Shape the outputs like the original input shape
-        #  DEV NOTE: Do the "batch_utils" have support for these kind of operations?
-        bond_counts = tf.shape(pair_logits)[-1]
-        output_shape = tf.concat((outer_shape, (batch_size, bond_counts, bond_counts)), axis=0)
-        pair_logits = tf.reshape(pair_logits, output_shape)
-        return MultiCategorical(pair_logits), ()
+        return pair_logits
+
+    @tf.function(input_signature=[
+        tf.TensorSpec([None, None], dtype=tf.int32),
+        tf.TensorSpec([None, None], dtype=tf.int32),
+        tf.TensorSpec([None, None], dtype=tf.bool),
+        tf.TensorSpec([None, None, 2], dtype=tf.int32),
+        tf.TensorSpec([None, None, None], dtype=tf.int32),
+    ])
+    def evaluate(self, atom, bond, is_atom, connectivity, allowed_actions):
+        """Simplified interface to the critic network designed to be compatible with TF serving and C++
+
+        Parameters
+        ----------
+
+        atom:
+            (B, N) matrix defining the type of each node. Where B is the batch size and N is the number of nodes
+        bond:
+            (B, E) matrix defining the type of each edge. Where B is the batch size and E is the number of edges
+        is_atom:
+            (B, N) matrix defining the whether each atom is part of the graph.
+        connectivity:
+            (B, E, 2) matrix defining the endpoints of edges in the graph
+        allowed_actions:
+            (B, N, N) matrix defining which edges are allowed to be created
+
+        Returns
+        -------
+        logits:
+            (B, N, N) matrix of the log probability each edge should be added
+        """
+        observations = {
+            'atom': atom,
+            'bond': bond,
+            'is_atom': is_atom,
+            'connectivity': connectivity,
+            'allowed_actions': allowed_actions
+        }
+        return self.compute_logits(observations)
+
+    def save_as_savedmodel(self, output_dir: Union[str, Path]):
+        """Save the model to disk in a saved-model format that is compatible with loading in C++.
+
+        First creates a concrete version of "evaluation" function that uses fixed array sizes,
+        which offers better performance, and then saves it to disk in SavedModel format.
+
+        Parameters
+        ----------
+        output_dir:
+            Path to which we should write the model
+        """
+
+        # Make a concrete version of the function
+        spec = self.evaluate.get_concrete_function(
+            self.example_timestep['atom'],
+            self.example_timestep['bond'],
+            self.example_timestep['is_atom'],
+            self.example_timestep['connectivity'],
+            self.example_timestep['allowed_actions'],
+        )
+
+        tf.saved_model.save(self, str(output_dir), signatures=spec)
 
 
 class GCPNCriticNetwork(MPNNNetworkMixin, network.Network):

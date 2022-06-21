@@ -172,3 +172,26 @@ def test_ppo_policy(tf_env, example_batch):
     )
     tf_agent.initialize()
     tf_agent.collect_policy.action(tf_env.reset())
+
+
+def test_savedmodel(tmpdir, tf_env, example_batch):
+    # Make a network
+    actor_net = GCPNActorNetwork(tf_env.observation_spec(), tf_env.action_spec(), tf_env.reset())
+
+    # Save it to disk
+    out_path = tmpdir / 'test'
+    actor_net.save_as_savedmodel(out_path)
+
+    # Load it in as a saved_model
+    model = tf.saved_model.load(str(out_path))
+
+    # Test it!
+    observation = example_batch['observation']
+    output = model.evaluate(
+        observation['atom'],
+        observation['bond'],
+        observation['is_atom'],
+        observation['connectivity'],
+        observation['allowed_actions'],
+    )
+    assert tf.reduce_all(tf.equal(output, actor_net.compute_logits(observation)))
