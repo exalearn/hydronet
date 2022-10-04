@@ -14,7 +14,7 @@ which is needed for Challenge 3.
 
 ## Quickstart
 
-Download the data from [our Globus endpoint](https://app.globus.org/file-manager?origin_id=e38ee745-6d04-11e5-ba46-22000b92c6ec&origin_path=%2Fexalearn-design%2Fneurips%2Fdata%2Foutput%2F) to the `./data/output` folder.
+Download the data from [our Globus endpoint](https://app.globus.org/file-manager?origin_id=f10a69a9-338c-4e5b-baa1-0dc92359ab47&origin_path=%2Fexalearn-design%2Fneurips%2Fdata%2Foutput%2F) to the `./data/output` folder.
 The `./get-data.sh` script automates the download process if your computer has Globus Connect installed.
 
 Each of the subdirectories hold notebooks and scripts that give example solutions to some of the challenge problems
