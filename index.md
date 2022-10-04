@@ -16,7 +16,7 @@ Each entry represents a different bonding network of water clusters that were ge
 
 Our challenge problem is broken into three sub challenges. 
 
-Data for each problem are available in JSON (`*.json.gz`) and Tensorflow ProtoBuf (`*.proto`) format [*on a Globus Endpoint*](https://app.globus.org/file-manager?origin_id=e38ee745-6d04-11e5-ba46-22000b92c6ec&origin_path=%2Fexalearn-design%2Fneurips%2Fdata%2Foutput%2F). We provide each challenge in predefined train, test, and validation splits.
+Data for each problem are available in JSON (`*.json.gz`) and Tensorflow ProtoBuf (`*.proto`) format [*on a Globus Endpoint*](https://app.globus.org/file-manager?origin_id=f10a69a9-338c-4e5b-baa1-0dc92359ab47&origin_path=%2Fexalearn-design%2Fneurips%2Fdata%2Foutput%2F). We provide each challenge in predefined train, test, and validation splits.
 
 ### Challenge 1: Predict Energy from Geometry
 
