@@ -5,6 +5,7 @@ import base64
 import pickle as pkl
 import json
 import os
+from io import StringIO
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Iterable, Union
@@ -153,6 +154,13 @@ class HydroNetRecord(BaseModel):
     def atomic_nx(self) -> nx.Graph:
         """NetworkX version of the atomic graph"""
         return graph_from_dict(self.atomic_dict)
+
+    @property
+    def xyz(self) -> str:
+        """Structure in XYZ format"""
+        fp = StringIO()
+        self.atoms.write(fp, 'xyz')
+        return fp.getvalue()
 
     @classmethod
     def from_atoms(cls, atoms: ase.Atoms, energy: Optional[float] = None) -> 'HydroNetRecord':
